@@ -1,7 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import { useHotelScope } from "../context/HotelScopeContext";
 import { Footer } from "./Footer";
+import { UserMenu } from "./UserMenu";
 import zsHoldingsLogo from "../assets/logo-zsholdings.png";
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -9,38 +8,12 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     isActive ? "bg-gold-500/15 text-gold-300" : "text-ink-300 hover:bg-navy-800 hover:text-ink-100"
   }`;
 
-const settingsLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border whitespace-nowrap transition ${
-    isActive
-      ? "border-gold-500 text-gold-300"
-      : "border-navy-700 text-ink-300 hover:border-gold-500 hover:text-gold-300"
-  }`;
-
-function GearIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <circle cx="10" cy="10" r="2.6" stroke="currentColor" strokeWidth="1.4" />
-      <path
-        d="M10 2.5v2M10 15.5v2M17.5 10h-2M4.5 10h-2M15.36 4.64l-1.42 1.42M6.06 13.94l-1.42 1.42M15.36 15.36l-1.42-1.42M6.06 6.06 4.64 4.64"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 export function Layout() {
-  const { user, logout } = useAuth();
-  const { hotels, selectedHotelId, setSelectedHotelId, canSwitchHotels } = useHotelScope();
-
-  const longestHotelName = hotels.reduce((max, h) => Math.max(max, h.name.length), 0);
-
   return (
     <div className="min-h-screen bg-navy-950 flex flex-col">
       <header className="sticky top-0 z-10 bg-navy-950/95 backdrop-blur border-b border-navy-800">
         <div className="mx-auto max-w-[1600px] px-4 py-3 flex items-center gap-2">
-          <div className="flex items-center gap-2 flex-none">
+          <div className="flex items-center gap-2 flex-none pr-6">
             <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-9 w-auto flex-none" />
             <span className="font-semibold text-ink-100 whitespace-nowrap hidden sm:inline">
               Engineering Inventory
@@ -62,30 +35,7 @@ export function Layout() {
             </NavLink>
           </nav>
 
-          <div className="flex items-center gap-2 flex-none">
-            {canSwitchHotels && (
-              <select
-                className="bg-navy-900 border border-navy-700 rounded-md text-sm px-2 py-1 text-ink-100 flex-none"
-                style={{ width: `${longestHotelName + 3}ch` }}
-                value={selectedHotelId}
-                onChange={(e) => setSelectedHotelId(e.target.value)}
-              >
-                {hotels.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <span className="hidden 2xl:inline text-sm text-ink-500 whitespace-nowrap">{user?.name}</span>
-            <NavLink to="/settings" className={settingsLinkClass}>
-              <GearIcon />
-              <span className="hidden md:inline">Settings</span>
-            </NavLink>
-            <button onClick={logout} className="btn-ghost text-xs px-2.5 py-1.5 whitespace-nowrap">
-              Log out
-            </button>
-          </div>
+          <UserMenu />
         </div>
       </header>
       <main className="mx-auto max-w-[1600px] px-4 py-6 flex-1 w-full">

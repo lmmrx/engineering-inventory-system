@@ -88,12 +88,10 @@ function ProtectedApp() {
             <Route
               path="appearance"
               element={
-                <RoleGate roles={["ADMIN"]}>
-                  <ComingSoon
-                    title="Appearance"
-                    description="Engineering Inventory currently ships as a single dark, navy-and-gold theme by design. A configurable theme is not planned in the near term."
-                  />
-                </RoleGate>
+                <ComingSoon
+                  title="Appearance"
+                  description="Engineering Inventory currently ships as a single dark theme by design. A configurable theme is not planned in the near term."
+                />
               }
             />
             <Route
