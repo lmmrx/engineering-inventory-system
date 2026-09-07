@@ -17,7 +17,25 @@ import { prisma } from "./lib/prisma";
 export function createApp() {
   const app = express();
 
-  app.use(cors({ origin: process.env.CLIENT_ORIGIN ?? "http://localhost:5173" }));
+  // CLIENT_ORIGIN may list several allowed origins, comma-separated (a Vercel
+  // project commonly has more than one valid domain — a production alias, an
+  // auto-generated one, a custom domain). Falls back to local dev if unset.
+  const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:5173")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  app.use(
+    cors({
+      origin(origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error("Not allowed by CORS"));
+        }
+      },
+    })
+  );
   app.use(express.json());
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
