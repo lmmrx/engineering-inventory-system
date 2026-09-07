@@ -4,6 +4,7 @@ import { api } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { AppUser, Department, Hotel, Role } from "../../types";
 import { Field, Modal, ModalActions } from "../../components/Modal";
+import { PasswordInput } from "../../components/PasswordInput";
 
 export function OrgUsers() {
   const { user: currentUser } = useAuth();
@@ -133,10 +134,9 @@ function CreateUserModal({
           />
         </Field>
         <Field label="Temporary password">
-          <input
+          <PasswordInput
             required
             minLength={8}
-            type="text"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="input-field"

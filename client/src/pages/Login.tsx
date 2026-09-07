@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Footer } from "../components/Footer";
+import { PasswordInput } from "../components/PasswordInput";
 import zsHoldingsLogo from "../assets/logo-zsholdings.png";
 
 export function Login() {
@@ -49,14 +50,13 @@ export function Login() {
           />
         </label>
 
-        <label className="block">
+        <label className="block mb-4">
           <span className="label-field">Password</span>
-          <input
-            type="password"
+          <PasswordInput
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="input-field mb-4"
+            className="input-field"
           />
         </label>
 

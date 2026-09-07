@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { api } from "../../api/client";
+import { PasswordInput } from "../../components/PasswordInput";
 
 export function SecuritySettings() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -45,8 +46,7 @@ export function SecuritySettings() {
       <form onSubmit={handleSubmit} className="space-y-3">
         <label className="block">
           <span className="label-field">Current password</span>
-          <input
-            type="password"
+          <PasswordInput
             required
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
@@ -55,8 +55,7 @@ export function SecuritySettings() {
         </label>
         <label className="block">
           <span className="label-field">New password</span>
-          <input
-            type="password"
+          <PasswordInput
             required
             minLength={8}
             value={newPassword}
@@ -66,8 +65,7 @@ export function SecuritySettings() {
         </label>
         <label className="block">
           <span className="label-field">Confirm new password</span>
-          <input
-            type="password"
+          <PasswordInput
             required
             minLength={8}
             value={confirmPassword}
