@@ -42,7 +42,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     label: "Platform",
     items: [
       { to: "notifications", label: "Notifications", roles: ["ADMIN"] },
-      { to: "appearance", label: "Appearance", roles: ALL_ROLES },
+      { to: "appearance", label: "Appearance", roles: ["ADMIN"] },
       { to: "language", label: "Language & Region", roles: ["ADMIN"] },
       { to: "communications", label: "Communications", roles: ["ADMIN"] },
     ],

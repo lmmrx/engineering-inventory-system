@@ -108,9 +108,6 @@ export function UserMenu() {
               <button onClick={() => goTo("/settings/profile")} className={menuItemClass}>
                 Account settings
               </button>
-              <button onClick={() => goTo("/settings/appearance")} className={menuItemClass}>
-                Appearance
-              </button>
 
               <div className="my-1 border-t border-navy-800" />
 
