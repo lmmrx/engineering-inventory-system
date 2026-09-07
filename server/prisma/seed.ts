@@ -3,7 +3,15 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
-const HOTEL_COUNT = 7;
+const HOTELS = [
+  { code: "YQFES", name: "Holiday Inn Express Red Deer North" },
+  { code: "YQFSB", name: "Staybridge Suites Red Deer" },
+  { code: "YRDAB", name: "Holiday Inn Express Red Deer" },
+  { code: "YRDWS", name: "Holiday Inn & Suites Red Deer South" },
+  { code: "YHTSS", name: "Holiday Inn Express Hotel & Suites Hinton" },
+  { code: "YHTCA", name: "Holiday Inn Hinton" },
+  { code: "YHDEE", name: "Holiday Inn Express & Suites Edson" },
+];
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "ChangeMe123!";
 
@@ -36,11 +44,11 @@ async function main() {
   }
 
   const hotels = [];
-  for (let i = 1; i <= HOTEL_COUNT; i++) {
+  for (const { code, name } of HOTELS) {
     const hotel = await prisma.hotel.upsert({
-      where: { code: `HOTEL-${i}` },
-      update: {},
-      create: { name: `Hotel ${i}`, code: `HOTEL-${i}` },
+      where: { code },
+      update: { name },
+      create: { name, code },
     });
     hotels.push(hotel);
   }

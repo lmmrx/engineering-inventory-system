@@ -59,7 +59,9 @@ export function Inventory() {
             {itemsQuery.data?.map((item) => (
               <tr key={item.id} className={item.quantityOnHand <= item.reorderPoint ? "bg-rose-500/10" : ""}>
                 <td className="px-4 py-2 font-medium text-ink-100">{item.name}</td>
-                {viewingAllHotels && <td className="px-4 py-2 text-ink-500">{item.hotel?.name}</td>}
+                {viewingAllHotels && (
+                  <td className="px-4 py-2 text-ink-500 font-mono">{item.hotel?.code}</td>
+                )}
                 <td className="px-4 py-2 text-ink-500">{item.category?.name}</td>
                 <td className="px-4 py-2 font-mono text-ink-200">
                   {item.quantityOnHand} {item.unit}

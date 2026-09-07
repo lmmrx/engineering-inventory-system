@@ -15,7 +15,7 @@ export function OrgUsers() {
   const hotelsQuery = useQuery({ queryKey: ["hotels"], queryFn: () => api.get<Hotel[]>("/hotels") });
   const departmentsQuery = useQuery({ queryKey: ["departments"], queryFn: () => api.get<Department[]>("/departments") });
 
-  const hotelName = (id: string | null) => hotelsQuery.data?.find((h) => h.id === id)?.name ?? "All hotels";
+  const hotelCode = (id: string | null) => hotelsQuery.data?.find((h) => h.id === id)?.code ?? "All hotels";
 
   if (!currentUser) return null;
 
@@ -46,7 +46,7 @@ export function OrgUsers() {
                 <td className="px-4 py-2 font-medium text-ink-100">{u.name}</td>
                 <td className="px-4 py-2 text-ink-500">{u.email}</td>
                 <td className="px-4 py-2 text-ink-500">{u.role}</td>
-                <td className="px-4 py-2 text-ink-500">{hotelName(u.hotelId)}</td>
+                <td className="px-4 py-2 text-ink-500 font-mono">{hotelCode(u.hotelId)}</td>
               </tr>
             ))}
           </tbody>
@@ -177,7 +177,7 @@ function CreateUserModal({
             <select value={hotelId} onChange={(e) => setHotelId(e.target.value)} className="input-field">
               {hotels.map((h) => (
                 <option key={h.id} value={h.id}>
-                  {h.name}
+                  {h.code}
                 </option>
               ))}
             </select>

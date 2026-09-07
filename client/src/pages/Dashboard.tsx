@@ -32,7 +32,7 @@ export function Dashboard() {
               <Link to="/inventory" className="text-ink-200 hover:text-gold-300">
                 {item.name}
                 {viewingAllHotels && item.hotel && (
-                  <span className="text-ink-600 font-normal"> · {item.hotel.name}</span>
+                  <span className="text-ink-600 font-normal font-mono"> · {item.hotel.code}</span>
                 )}
               </Link>
               <span className="text-rose-400 font-medium font-mono">
@@ -51,7 +51,7 @@ export function Dashboard() {
               <span className="text-ink-200">
                 {tx.type} · {tx.item?.name ?? tx.itemId}
                 {viewingAllHotels && tx.item?.hotel && (
-                  <span className="text-ink-600"> · {tx.item.hotel.name}</span>
+                  <span className="text-ink-600 font-mono"> · {tx.item.hotel.code}</span>
                 )}
               </span>
               <span className={`font-mono ${tx.quantity < 0 ? "text-rose-400" : "text-emerald-400"}`}>

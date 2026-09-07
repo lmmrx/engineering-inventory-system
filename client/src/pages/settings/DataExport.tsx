@@ -7,7 +7,7 @@ export function DataExport() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const hotelName = hotels.find((h) => h.id === selectedHotelId)?.name;
+  const hotelCode = hotels.find((h) => h.id === selectedHotelId)?.code;
 
   async function handleDownload(kind: "inventory" | "transactions") {
     setError(null);
@@ -28,7 +28,7 @@ export function DataExport() {
       <p className="text-sm text-ink-500 mb-5">
         {canSwitchHotels
           ? "Download a CSV across all hotels."
-          : `Download a CSV for ${hotelName ?? "your hotel"}.`}
+          : `Download a CSV for ${hotelCode ?? "your hotel"}.`}
       </p>
 
       <div className="space-y-3">

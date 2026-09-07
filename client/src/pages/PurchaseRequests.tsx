@@ -101,7 +101,9 @@ export function PurchaseRequests() {
                 </span>
                 <span className="text-sm text-ink-500">
                   Requested by {pr.requestedBy?.name} on {new Date(pr.createdAt).toLocaleDateString()}
-                  {viewingAllHotels && pr.hotel && <> · {pr.hotel.name}</>}
+                  {viewingAllHotels && pr.hotel && (
+                    <span className="font-mono"> · {pr.hotel.code}</span>
+                  )}
                 </span>
               </div>
               <RoleGate roles={["ADMIN", "MANAGER"]}>

@@ -79,7 +79,7 @@ export function WorkOrders() {
               <p className="text-xs text-ink-600 mt-1">
                 Created by {wo.createdBy?.name} · {new Date(wo.createdAt).toLocaleDateString()}
                 {wo.assignedTo && ` · Assigned to ${wo.assignedTo.name}`}
-                {viewingAllHotels && wo.hotel && ` · ${wo.hotel.name}`}
+                {viewingAllHotels && wo.hotel && <span className="font-mono"> · {wo.hotel.code}</span>}
               </p>
             </div>
           );
