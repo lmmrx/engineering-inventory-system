@@ -21,13 +21,14 @@ function ChevronLeft() {
 
 function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="flex-none">
       <path d="M4 10.5 8 14.5 16 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-const menuItemClass = "flex items-center justify-between w-full text-left px-3 py-2 text-sm text-ink-200 hover:bg-navy-800 rounded-md transition";
+const menuItemClass =
+  "flex items-center justify-between gap-2 w-full text-left px-3 py-2 text-sm text-ink-200 hover:bg-navy-800 rounded-md transition";
 
 export function UserMenu() {
   const { user, logout } = useAuth();
@@ -65,17 +66,24 @@ export function UserMenu() {
   }
 
   return (
-    <div className="relative flex-none" ref={containerRef}>
+    <div className="relative flex-none flex items-center gap-2" ref={containerRef}>
+      <span
+        className="hidden md:inline text-sm text-ink-300 truncate max-w-[220px]"
+        title={currentHotelName}
+      >
+        {currentHotelName}
+      </span>
+
       <button
         onClick={() => setOpen((v) => !v)}
-        className="h-8 w-8 rounded-full bg-gold-500 text-white text-sm font-semibold flex items-center justify-center hover:bg-gold-600 transition"
+        className="h-8 w-8 rounded-full bg-gold-500 text-white text-sm font-semibold flex items-center justify-center hover:bg-gold-600 transition flex-none"
         aria-label="Account menu"
       >
         {initial}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-64 card shadow-2xl shadow-black/50 py-1.5 z-20">
+        <div className="absolute right-0 top-full mt-2 w-80 card shadow-2xl shadow-black/50 py-1.5 z-20">
           <div className="px-3 py-2 border-b border-navy-800 mb-1">
             <p className="text-sm font-medium text-ink-100 truncate">{user.name}</p>
             <p className="text-xs text-ink-500 truncate">{user.email}</p>
@@ -85,12 +93,12 @@ export function UserMenu() {
             <div className="px-1.5 space-y-0.5">
               <button
                 onClick={() => (canSwitchHotels ? setShowPropertyList(true) : undefined)}
-                className={`${menuItemClass} ${!canSwitchHotels ? "cursor-default hover:bg-transparent" : ""}`}
+                className={`${menuItemClass} items-start ${!canSwitchHotels ? "cursor-default hover:bg-transparent" : ""}`}
                 disabled={!canSwitchHotels}
               >
-                <span>
+                <span className="min-w-0">
                   <span className="block text-ink-500 text-xs">Property</span>
-                  <span className="block truncate max-w-[13rem]">{currentHotelName}</span>
+                  <span className="block leading-snug break-words">{currentHotelName}</span>
                 </span>
                 {canSwitchHotels && <ChevronRight />}
               </button>
@@ -124,7 +132,7 @@ export function UserMenu() {
                   Property
                 </span>
               </button>
-              <div className="max-h-64 overflow-y-auto space-y-0.5">
+              <div className="max-h-72 overflow-y-auto space-y-0.5">
                 {hotels.map((h) => (
                   <button
                     key={h.id}
@@ -135,7 +143,7 @@ export function UserMenu() {
                     }}
                     className={menuItemClass}
                   >
-                    <span className="truncate">{h.name}</span>
+                    <span className="break-words leading-snug">{h.name}</span>
                     {h.id === selectedHotelId && <CheckIcon />}
                   </button>
                 ))}
