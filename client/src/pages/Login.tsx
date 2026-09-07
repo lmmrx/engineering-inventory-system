@@ -32,7 +32,7 @@ export function Login() {
       <div className="flex-1 flex items-center justify-center">
       <form onSubmit={handleSubmit} className="modal-panel max-w-sm">
         <div className="flex items-center gap-3 mb-6">
-          <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-10 w-auto flex-none" />
+          <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-8 w-auto flex-none" />
           <div>
             <h1 className="text-base font-semibold text-ink-100 leading-tight">Engineering Inventory</h1>
             <p className="text-xs text-ink-500">Sign in to continue</p>

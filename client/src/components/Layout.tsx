@@ -14,7 +14,7 @@ export function Layout() {
       <header className="sticky top-0 z-10 bg-navy-950/95 backdrop-blur border-b border-navy-800">
         <div className="mx-auto max-w-[1600px] px-4 py-3 flex items-center gap-2">
           <div className="flex items-center gap-2 flex-none pr-6">
-            <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-9 w-auto flex-none" />
+            <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-7 w-auto flex-none" />
             <span className="font-semibold text-ink-100 whitespace-nowrap hidden sm:inline">
               Engineering Inventory
             </span>
