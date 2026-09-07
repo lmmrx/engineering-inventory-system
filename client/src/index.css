@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-navy-950 text-ink-300 font-sans;
+  }
+  ::selection {
+    @apply bg-gold-500 text-ink-100;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-navy-900 border border-navy-800 rounded-md;
+  }
+  .table-shell {
+    @apply bg-navy-900 border border-navy-800 rounded-md overflow-hidden;
+  }
+  .table-head-row {
+    @apply bg-navy-900 text-ink-500 text-left text-xs uppercase tracking-wide border-b border-navy-800;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-gold-600/60 bg-gold-500 text-white font-semibold text-sm px-3.5 py-2 whitespace-nowrap shadow-sm transition hover:bg-gold-600 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-navy-700 bg-navy-800/40 text-ink-200 text-sm px-3.5 py-2 whitespace-nowrap shadow-sm transition hover:bg-navy-800 hover:border-navy-600 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .input-field {
+    @apply w-full bg-navy-950 border border-navy-700 rounded-md px-3 py-2 text-sm text-ink-100 placeholder:text-ink-600 focus:outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/30;
+  }
+  .label-field {
+    @apply block text-sm font-medium text-ink-300 mb-1;
+  }
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50;
+  }
+  .modal-panel {
+    @apply card shadow-2xl shadow-black/50 w-full p-6;
+  }
+}

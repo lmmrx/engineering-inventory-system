@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: engineering-inventory-api
+    runtime: node
+    plan: free
+    buildCommand: npm install && npx prisma generate --schema=server/prisma/schema.prisma && npx prisma migrate deploy --schema=server/prisma/schema.prisma && npm run build --workspace server
+    startCommand: npm run start --workspace server
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false

@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum TransactionType {
+  RECEIVE
+  ISSUE
+  ADJUSTMENT
+}
+
+enum WorkOrderStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum PurchaseRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RECEIVED
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  users            User[]
+  categories       Category[]
+  items            InventoryItem[]
+  workOrders       WorkOrder[]
+  purchaseRequests PurchaseRequest[]
+}
+
+model Hotel {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  address   String?
+  createdAt DateTime @default(now())
+
+  users            User[]
+  items            InventoryItem[]
+  workOrders       WorkOrder[]
+  purchaseRequests PurchaseRequest[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STAFF)
+  createdAt    DateTime @default(now())
+
+  hotelId String?
+  hotel   Hotel?  @relation(fields: [hotelId], references: [id])
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  transactions          StockTransaction[]  @relation("PerformedBy")
+  createdWorkOrders     WorkOrder[]         @relation("CreatedBy")
+  assignedWorkOrders    WorkOrder[]         @relation("AssignedTo")
+  requestedPurchases    PurchaseRequest[]   @relation("RequestedBy")
+  approvedPurchases     PurchaseRequest[]   @relation("ApprovedBy")
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  items InventoryItem[]
+
+  @@unique([departmentId, name])
+}
+
+model InventoryItem {
+  id             String   @id @default(cuid())
+  name           String
+  sku            String?
+  unit           String   @default("ea")
+  quantityOnHand Int      @default(0)
+  reorderPoint   Int      @default(0)
+  maxLevel       Int?
+  unitCost       Decimal? @db.Decimal(10, 2)
+  location       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id])
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  transactions         StockTransaction[]
+  purchaseRequestItems PurchaseRequestItem[]
+
+  @@unique([hotelId, sku])
+  @@index([hotelId, departmentId])
+}
+
+model StockTransaction {
+  id        String          @id @default(cuid())
+  type      TransactionType
+  quantity  Int
+  notes     String?
+  createdAt DateTime        @default(now())
+
+  itemId String
+  item   InventoryItem @relation(fields: [itemId], references: [id])
+
+  performedByUserId String
+  performedBy       User   @relation("PerformedBy", fields: [performedByUserId], references: [id])
+
+  workOrderId String?
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id])
+
+  purchaseRequestId String?
+  purchaseRequest   PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
+
+  @@index([itemId])
+}
+
+model WorkOrder {
+  id          String          @id @default(cuid())
+  title       String
+  description String?
+  status      WorkOrderStatus @default(OPEN)
+  createdAt   DateTime        @default(now())
+  completedAt DateTime?
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id])
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  createdByUserId String
+  createdBy       User   @relation("CreatedBy", fields: [createdByUserId], references: [id])
+
+  assignedToUserId String?
+  assignedTo       User?   @relation("AssignedTo", fields: [assignedToUserId], references: [id])
+
+  transactions StockTransaction[]
+
+  @@index([hotelId, status])
+}
+
+model PurchaseRequest {
+  id        String                @id @default(cuid())
+  status    PurchaseRequestStatus @default(PENDING)
+  notes     String?
+  createdAt DateTime              @default(now())
+
+  hotelId String
+  hotel   Hotel  @relation(fields: [hotelId], references: [id])
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  requestedByUserId String
+  requestedBy       User   @relation("RequestedBy", fields: [requestedByUserId], references: [id])
+
+  approvedByUserId String?
+  approvedBy       User?   @relation("ApprovedBy", fields: [approvedByUserId], references: [id])
+
+  items        PurchaseRequestItem[]
+  transactions StockTransaction[]
+
+  @@index([hotelId, status])
+}
+
+model PurchaseRequestItem {
+  id                String   @id @default(cuid())
+  quantityRequested Int
+  quantityReceived  Int      @default(0)
+  estimatedCost     Decimal? @db.Decimal(10, 2)
+
+  purchaseRequestId String
+  purchaseRequest   PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+
+  itemId String
+  item   InventoryItem @relation(fields: [itemId], references: [id])
+}
