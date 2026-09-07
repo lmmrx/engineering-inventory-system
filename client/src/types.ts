@@ -72,6 +72,7 @@ export interface WorkOrder {
   departmentId: string;
   createdBy?: { id: string; name: string };
   assignedTo?: { id: string; name: string } | null;
+  hotel?: Hotel;
 }
 
 export type PurchaseRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "RECEIVED";
@@ -95,6 +96,7 @@ export interface PurchaseRequest {
   requestedBy?: { id: string; name: string };
   approvedBy?: { id: string; name: string } | null;
   items: PurchaseRequestItem[];
+  hotel?: Hotel;
 }
 
 export interface AppUser {

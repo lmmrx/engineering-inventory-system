@@ -17,6 +17,7 @@ workOrdersRouter.get(
       include: {
         createdBy: { select: { id: true, name: true } },
         assignedTo: { select: { id: true, name: true } },
+        hotel: true,
       },
       orderBy: { createdAt: "desc" },
     });

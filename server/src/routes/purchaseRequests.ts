@@ -18,6 +18,7 @@ purchaseRequestsRouter.get(
         items: { include: { item: true } },
         requestedBy: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
+        hotel: true,
       },
       orderBy: { createdAt: "desc" },
     });

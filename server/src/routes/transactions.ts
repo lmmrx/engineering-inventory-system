@@ -19,7 +19,11 @@ transactionsRouter.get(
         itemId: typeof itemId === "string" ? itemId : undefined,
         item: hotelId ? { hotelId } : undefined,
       },
-      include: { item: true, performedBy: { select: { id: true, name: true } }, workOrder: true },
+      include: {
+        item: { include: { hotel: true } },
+        performedBy: { select: { id: true, name: true } },
+        workOrder: true,
+      },
       orderBy: { createdAt: "desc" },
       take: 200,
     });

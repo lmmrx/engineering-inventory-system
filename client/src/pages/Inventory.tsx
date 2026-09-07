@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { useHotelScope } from "../context/HotelScopeContext";
+import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { Category, InventoryItem, TransactionType } from "../types";
 import { RoleGate } from "../components/RoleGate";
 import { Field, Modal, ModalActions } from "../components/Modal";
@@ -10,13 +10,14 @@ import { Field, Modal, ModalActions } from "../components/Modal";
 export function Inventory() {
   const { user } = useAuth();
   const { selectedHotelId } = useHotelScope();
+  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
   const queryClient = useQueryClient();
   const [showAddItem, setShowAddItem] = useState(false);
   const [stockModalItem, setStockModalItem] = useState<InventoryItem | null>(null);
 
   const itemsQuery = useQuery({
     queryKey: ["items", selectedHotelId],
-    queryFn: () => api.get<InventoryItem[]>(`/items?hotelId=${selectedHotelId}`),
+    queryFn: () => api.get<InventoryItem[]>(`/items${viewingAllHotels ? "" : `?hotelId=${selectedHotelId}`}`),
     enabled: !!selectedHotelId,
   });
 
@@ -31,17 +32,22 @@ export function Inventory() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-lg font-semibold text-ink-100">Inventory</h1>
         <RoleGate roles={["ADMIN", "MANAGER"]}>
-          <button onClick={() => setShowAddItem(true)} className="btn-primary">
-            Add item
-          </button>
+          {viewingAllHotels ? (
+            <span className="text-sm text-ink-500">Select a specific hotel to add items</span>
+          ) : (
+            <button onClick={() => setShowAddItem(true)} className="btn-primary">
+              Add item
+            </button>
+          )}
         </RoleGate>
       </div>
 
-      <div className="table-shell">
+      <div className="table-shell overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="table-head-row">
             <tr>
               <th className="px-4 py-2">Name</th>
+              {viewingAllHotels && <th className="px-4 py-2">Hotel</th>}
               <th className="px-4 py-2">Category</th>
               <th className="px-4 py-2">On hand</th>
               <th className="px-4 py-2">Reorder pt.</th>
@@ -53,6 +59,7 @@ export function Inventory() {
             {itemsQuery.data?.map((item) => (
               <tr key={item.id} className={item.quantityOnHand <= item.reorderPoint ? "bg-rose-500/10" : ""}>
                 <td className="px-4 py-2 font-medium text-ink-100">{item.name}</td>
+                {viewingAllHotels && <td className="px-4 py-2 text-ink-500">{item.hotel?.name}</td>}
                 <td className="px-4 py-2 text-ink-500">{item.category?.name}</td>
                 <td className="px-4 py-2 font-mono text-ink-200">
                   {item.quantityOnHand} {item.unit}
@@ -68,7 +75,11 @@ export function Inventory() {
             ))}
           </tbody>
         </table>
-        {itemsQuery.data?.length === 0 && <p className="text-sm text-ink-500 p-4">No items yet for this hotel.</p>}
+        {itemsQuery.data?.length === 0 && (
+          <p className="text-sm text-ink-500 p-4">
+            {viewingAllHotels ? "No items yet across any hotel." : "No items yet for this hotel."}
+          </p>
+        )}
       </div>
 
       {showAddItem && (

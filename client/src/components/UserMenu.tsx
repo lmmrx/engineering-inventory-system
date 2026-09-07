@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useHotelScope } from "../context/HotelScopeContext";
+import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 
 function ChevronRight() {
   return (
@@ -53,10 +53,13 @@ export function UserMenu() {
   if (!user) return null;
 
   const initial = user.name.trim().charAt(0).toUpperCase() || "?";
-  const currentHotelName = hotels.find((h) => h.id === selectedHotelId)?.name ?? "—";
+  const currentHotelName =
+    selectedHotelId === ALL_HOTELS
+      ? "All Hotels"
+      : hotels.find((h) => h.id === selectedHotelId)?.name ?? "—";
   // Size the label to the longest hotel name so it never truncates and doesn't
   // jump around in width when switching between shorter/longer property names.
-  const longestHotelName = hotels.reduce((max, h) => Math.max(max, h.name.length), 0);
+  const longestHotelName = hotels.reduce((max, h) => Math.max(max, h.name.length), "All Hotels".length);
 
   function closeMenu() {
     setOpen(false);
@@ -136,6 +139,18 @@ export function UserMenu() {
                 </span>
               </button>
               <div className="max-h-72 overflow-y-auto space-y-0.5">
+                <button
+                  onClick={() => {
+                    setSelectedHotelId(ALL_HOTELS);
+                    setShowPropertyList(false);
+                    closeMenu();
+                  }}
+                  className={menuItemClass}
+                >
+                  <span className="font-medium">All Hotels</span>
+                  {selectedHotelId === ALL_HOTELS && <CheckIcon />}
+                </button>
+                <div className="my-1 border-t border-navy-800" />
                 {hotels.map((h) => (
                   <button
                     key={h.id}

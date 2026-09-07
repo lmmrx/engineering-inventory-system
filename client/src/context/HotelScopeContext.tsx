@@ -3,6 +3,11 @@ import { api } from "../api/client";
 import { Hotel } from "../types";
 import { useAuth } from "./AuthContext";
 
+// Sentinel for "no single hotel — show everything an Admin can see."
+// Distinct from the initial "" state (hotels not loaded yet) so query hooks
+// can tell "not ready" apart from "deliberately viewing all hotels."
+export const ALL_HOTELS = "__all__";
+
 interface HotelScopeValue {
   hotels: Hotel[];
   selectedHotelId: string;

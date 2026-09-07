@@ -1,21 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { useHotelScope } from "../context/HotelScopeContext";
+import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { InventoryItem, StockTransaction } from "../types";
 
 export function Dashboard() {
   const { selectedHotelId } = useHotelScope();
+  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
+  const hotelParam = viewingAllHotels ? "" : `hotelId=${selectedHotelId}&`;
 
   const lowStockQuery = useQuery({
     queryKey: ["items", "low-stock", selectedHotelId],
-    queryFn: () => api.get<InventoryItem[]>(`/items?hotelId=${selectedHotelId}&lowStockOnly=true`),
+    queryFn: () => api.get<InventoryItem[]>(`/items?${hotelParam}lowStockOnly=true`),
     enabled: !!selectedHotelId,
   });
 
   const activityQuery = useQuery({
     queryKey: ["transactions", selectedHotelId],
-    queryFn: () => api.get<StockTransaction[]>(`/transactions?hotelId=${selectedHotelId}`),
+    queryFn: () => api.get<StockTransaction[]>(`/transactions?${hotelParam}`),
     enabled: !!selectedHotelId,
   });
 
@@ -29,6 +31,9 @@ export function Dashboard() {
             <li key={item.id} className="py-2 flex items-center justify-between text-sm">
               <Link to="/inventory" className="text-ink-200 hover:text-gold-300">
                 {item.name}
+                {viewingAllHotels && item.hotel && (
+                  <span className="text-ink-600 font-normal"> · {item.hotel.name}</span>
+                )}
               </Link>
               <span className="text-rose-400 font-medium font-mono">
                 {item.quantityOnHand} / {item.reorderPoint} {item.unit}
@@ -45,6 +50,9 @@ export function Dashboard() {
             <li key={tx.id} className="py-2 text-sm flex items-center justify-between">
               <span className="text-ink-200">
                 {tx.type} · {tx.item?.name ?? tx.itemId}
+                {viewingAllHotels && tx.item?.hotel && (
+                  <span className="text-ink-600"> · {tx.item.hotel.name}</span>
+                )}
               </span>
               <span className={`font-mono ${tx.quantity < 0 ? "text-rose-400" : "text-emerald-400"}`}>
                 {tx.quantity > 0 ? "+" : ""}

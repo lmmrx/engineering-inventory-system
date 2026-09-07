@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { useHotelScope } from "../context/HotelScopeContext";
+import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { InventoryItem, PurchaseRequest } from "../types";
 import { RoleGate } from "../components/RoleGate";
 import { Modal, ModalActions } from "../components/Modal";
@@ -16,20 +16,22 @@ const statusColor: Record<string, string> = {
 
 export function PurchaseRequests() {
   const { selectedHotelId } = useHotelScope();
+  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
 
   const requestsQuery = useQuery({
     queryKey: ["purchase-requests", selectedHotelId],
-    queryFn: () => api.get<PurchaseRequest[]>(`/purchase-requests?hotelId=${selectedHotelId}`),
+    queryFn: () =>
+      api.get<PurchaseRequest[]>(`/purchase-requests${viewingAllHotels ? "" : `?hotelId=${selectedHotelId}`}`),
     enabled: !!selectedHotelId,
   });
 
   const itemsQuery = useQuery({
     queryKey: ["items", selectedHotelId],
-    queryFn: () => api.get<InventoryItem[]>(`/items?hotelId=${selectedHotelId}`),
-    enabled: !!selectedHotelId,
+    queryFn: () => api.get<InventoryItem[]>(`/items${viewingAllHotels ? "" : `?hotelId=${selectedHotelId}`}`),
+    enabled: !!selectedHotelId && !viewingAllHotels,
   });
 
   const [actionError, setActionError] = useState<string | null>(null);
@@ -78,9 +80,13 @@ export function PurchaseRequests() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-lg font-semibold text-ink-100">Purchase Requests</h1>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
-          New request
-        </button>
+        {viewingAllHotels ? (
+          <span className="text-sm text-ink-500">Select a specific hotel to create a request</span>
+        ) : (
+          <button onClick={() => setShowCreate(true)} className="btn-primary">
+            New request
+          </button>
+        )}
       </div>
 
       {actionError && <p className="text-sm text-rose-400 mb-4">{actionError}</p>}
@@ -95,6 +101,7 @@ export function PurchaseRequests() {
                 </span>
                 <span className="text-sm text-ink-500">
                   Requested by {pr.requestedBy?.name} on {new Date(pr.createdAt).toLocaleDateString()}
+                  {viewingAllHotels && pr.hotel && <> · {pr.hotel.name}</>}
                 </span>
               </div>
               <RoleGate roles={["ADMIN", "MANAGER"]}>
@@ -136,7 +143,9 @@ export function PurchaseRequests() {
           </div>
         ))}
         {requestsQuery.data?.length === 0 && (
-          <p className="text-sm text-ink-500">No purchase requests for this hotel yet.</p>
+          <p className="text-sm text-ink-500">
+            {viewingAllHotels ? "No purchase requests across any hotel yet." : "No purchase requests for this hotel yet."}
+          </p>
         )}
       </div>
 

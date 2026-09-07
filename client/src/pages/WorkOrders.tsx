@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { useHotelScope } from "../context/HotelScopeContext";
+import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { WorkOrder, WorkOrderStatus } from "../types";
 import { Modal, ModalActions } from "../components/Modal";
 
@@ -14,13 +14,14 @@ const statusColor: Record<WorkOrderStatus, string> = {
 
 export function WorkOrders() {
   const { selectedHotelId } = useHotelScope();
+  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
 
   const workOrdersQuery = useQuery({
     queryKey: ["work-orders", selectedHotelId],
-    queryFn: () => api.get<WorkOrder[]>(`/work-orders?hotelId=${selectedHotelId}`),
+    queryFn: () => api.get<WorkOrder[]>(`/work-orders${viewingAllHotels ? "" : `?hotelId=${selectedHotelId}`}`),
     enabled: !!selectedHotelId,
   });
 
@@ -44,9 +45,13 @@ export function WorkOrders() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-lg font-semibold text-ink-100">Work Orders</h1>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
-          New work order
-        </button>
+        {viewingAllHotels ? (
+          <span className="text-sm text-ink-500">Select a specific hotel to create a work order</span>
+        ) : (
+          <button onClick={() => setShowCreate(true)} className="btn-primary">
+            New work order
+          </button>
+        )}
       </div>
 
       <div className="space-y-3">
@@ -74,11 +79,16 @@ export function WorkOrders() {
               <p className="text-xs text-ink-600 mt-1">
                 Created by {wo.createdBy?.name} · {new Date(wo.createdAt).toLocaleDateString()}
                 {wo.assignedTo && ` · Assigned to ${wo.assignedTo.name}`}
+                {viewingAllHotels && wo.hotel && ` · ${wo.hotel.name}`}
               </p>
             </div>
           );
         })}
-        {workOrdersQuery.data?.length === 0 && <p className="text-sm text-ink-500">No work orders yet.</p>}
+        {workOrdersQuery.data?.length === 0 && (
+          <p className="text-sm text-ink-500">
+            {viewingAllHotels ? "No work orders across any hotel yet." : "No work orders yet."}
+          </p>
+        )}
       </div>
 
       {showCreate && (
