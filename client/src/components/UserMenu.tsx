@@ -54,6 +54,9 @@ export function UserMenu() {
 
   const initial = user.name.trim().charAt(0).toUpperCase() || "?";
   const currentHotelName = hotels.find((h) => h.id === selectedHotelId)?.name ?? "—";
+  // Size the label to the longest hotel name so it never truncates and doesn't
+  // jump around in width when switching between shorter/longer property names.
+  const longestHotelName = hotels.reduce((max, h) => Math.max(max, h.name.length), 0);
 
   function closeMenu() {
     setOpen(false);
@@ -68,8 +71,8 @@ export function UserMenu() {
   return (
     <div className="relative flex-none flex items-center gap-2" ref={containerRef}>
       <span
-        className="hidden md:inline text-sm text-ink-300 truncate max-w-[220px]"
-        title={currentHotelName}
+        className="hidden lg:inline text-sm text-ink-200 whitespace-nowrap"
+        style={{ minWidth: `${longestHotelName}ch` }}
       >
         {currentHotelName}
       </span>
