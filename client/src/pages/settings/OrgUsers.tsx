@@ -18,6 +18,9 @@ export function OrgUsers() {
   const departmentsQuery = useQuery({ queryKey: ["departments"], queryFn: () => api.get<Department[]>("/departments") });
 
   const hotelCode = (id: string | null) => hotelsQuery.data?.find((h) => h.id === id)?.code ?? "All hotels";
+  // The create form defaults its Hotel/Department dropdowns from this data —
+  // opening it before both have loaded would silently submit empty IDs.
+  const referenceDataReady = hotelsQuery.isSuccess && departmentsQuery.isSuccess;
 
   if (!currentUser) return null;
   const isAdmin = currentUser.role === "ADMIN";
@@ -38,7 +41,12 @@ export function OrgUsers() {
     <div>
       <div className="flex items-center justify-between mb-1">
         <h2 className="font-semibold text-ink-100">Users</h2>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
+        <button
+          onClick={() => setShowCreate(true)}
+          disabled={!referenceDataReady}
+          className="btn-primary"
+          title={referenceDataReady ? undefined : "Loading hotels and departments..."}
+        >
           Add user
         </button>
       </div>
