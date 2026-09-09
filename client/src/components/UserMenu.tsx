@@ -60,6 +60,11 @@ export function UserMenu() {
   const currentHotelCode =
     selectedHotelId === ALL_HOTELS ? "All Hotels" : hotels.find((h) => h.id === selectedHotelId)?.code ?? "—";
   const currentDepartmentName = departments.find((d) => d.id === selectedDepartmentId)?.name ?? "—";
+  // Size the header label to the worst-case combination so it never truncates
+  // and doesn't shift width as the selection changes.
+  const longestHotelCode = Math.max("All Hotels".length, ...hotels.map((h) => h.code.length));
+  const longestDepartmentName = Math.max(0, ...departments.map((d) => d.name.length));
+  const headerLabelWidth = longestHotelCode + 3 + longestDepartmentName;
 
   function closeMenu() {
     setOpen(false);
@@ -73,7 +78,14 @@ export function UserMenu() {
 
   return (
     <div className="relative flex-none flex items-center gap-1.5" ref={containerRef}>
-      <span className="hidden md:inline text-sm text-ink-200 font-mono whitespace-nowrap">{currentHotelCode}</span>
+      <span
+        className="hidden md:inline text-sm text-ink-200 whitespace-nowrap"
+        style={{ minWidth: `${headerLabelWidth}ch` }}
+      >
+        <span className="font-mono">{currentHotelCode}</span>
+        <span className="text-ink-600"> · </span>
+        <span>{currentDepartmentName}</span>
+      </span>
 
       <button
         onClick={() => setOpen((v) => !v)}

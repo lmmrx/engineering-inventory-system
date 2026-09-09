@@ -12,7 +12,13 @@ usersRouter.use(requireAuth, requireRole("ADMIN", "MANAGER"));
 usersRouter.get(
   "/",
   asyncHandler(async (req, res) => {
-    const where = req.user!.role === "MANAGER" ? { hotelId: req.user!.hotelId ?? undefined } : {};
+    // A Manager is the admin for exactly one (hotel, department) pair — they
+    // only ever see users in that same pair, never other departments at
+    // their own hotel or other hotels in their own department.
+    const where =
+      req.user!.role === "MANAGER"
+        ? { hotelId: req.user!.hotelId ?? undefined, departmentId: req.user!.departmentId ?? undefined }
+        : {};
     const users = await prisma.user.findMany({
       where,
       select: {
@@ -87,13 +93,30 @@ const updateSchema = z.object({
 
 usersRouter.patch(
   "/:id",
-  requireRole("ADMIN"),
   asyncHandler(async (req, res) => {
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
     const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "User not found" });
+
+    if (req.user!.role === "MANAGER") {
+      // A Manager is the admin for their own (hotel, department) pair only —
+      // they may only touch Staff already inside that pair, may not move
+      // anyone out of it, and may not hand out Manager/Admin privileges.
+      if (existing.role !== "STAFF" || existing.hotelId !== req.user!.hotelId || existing.departmentId !== req.user!.departmentId) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      if (parsed.data.role && parsed.data.role !== "STAFF") {
+        return res.status(403).json({ error: "Managers may not change a user's role to Manager or Admin" });
+      }
+      if (parsed.data.hotelId !== undefined && parsed.data.hotelId !== req.user!.hotelId) {
+        return res.status(403).json({ error: "Managers may not move a user to another hotel" });
+      }
+      if (parsed.data.departmentId !== undefined && parsed.data.departmentId !== req.user!.departmentId) {
+        return res.status(403).json({ error: "Managers may not move a user to another department" });
+      }
+    }
 
     const { password, ...rest } = parsed.data;
     const data: Record<string, unknown> = { ...rest };

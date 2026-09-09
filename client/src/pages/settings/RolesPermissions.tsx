@@ -13,11 +13,12 @@ const CAPABILITIES: Capability[] = [
   { label: "Approve or reject purchase requests", admin: true, manager: true, staff: false },
   { label: "Add or edit inventory items", admin: true, manager: true, staff: false },
   { label: "Manage categories", admin: true, manager: true, staff: false },
-  { label: "Create Staff accounts", admin: true, manager: true, staff: false },
+  { label: "Create Staff accounts in their own hotel & department", admin: true, manager: true, staff: false },
+  { label: "Edit Staff accounts in their own hotel & department (name, password)", admin: true, manager: true, staff: false },
   { label: "Create Manager or Admin accounts", admin: true, manager: false, staff: false },
-  { label: "Edit any user's role, hotel, or password", admin: true, manager: false, staff: false },
+  { label: "Change a user's role, hotel, or department", admin: true, manager: false, staff: false },
   { label: "Rename hotels", admin: true, manager: false, staff: false },
-  { label: "View or act on other hotels' data", admin: true, manager: false, staff: false },
+  { label: "View or act on other hotels' or departments' data", admin: true, manager: false, staff: false },
   { label: "Export inventory / transaction data", admin: true, manager: true, staff: false },
 ];
 
@@ -38,8 +39,9 @@ export function RolesPermissions() {
     <div>
       <h2 className="font-semibold text-ink-100 mb-1">Roles & permissions</h2>
       <p className="text-sm text-ink-500 mb-4">
-        What each role can do. Manager and Staff actions are always limited to their own hotel — only Admin can
-        act across the whole portfolio.
+        What each role can do. A Manager is the admin for exactly one hotel + department pair (e.g. Engineering at
+        one property) and can't see or act on any other hotel or department. Only Admin has access across the
+        whole organization.
       </p>
       <div className="table-shell overflow-x-auto">
         <table className="w-full text-sm">

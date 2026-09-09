@@ -21,9 +21,17 @@ export function OrgUsers() {
 
   if (!currentUser) return null;
   const isAdmin = currentUser.role === "ADMIN";
+  const isManager = currentUser.role === "MANAGER";
 
   function invalidateUsers() {
     queryClient.invalidateQueries({ queryKey: ["users"] });
+  }
+
+  function canEdit(u: AppUser) {
+    if (isAdmin) return true;
+    // A Manager is the admin for their own (hotel, department) pair — they can
+    // only edit the Staff already inside it, never another Manager or Admin.
+    return isManager && u.role === "STAFF";
   }
 
   return (
@@ -35,7 +43,7 @@ export function OrgUsers() {
         </button>
       </div>
       <p className="text-sm text-ink-500 mb-4">
-        {currentUser.role === "ADMIN" ? "Everyone with access to the system." : "Staff at your hotel."}
+        {isAdmin ? "Everyone with access to the system." : "Staff in your department at your hotel."}
       </p>
       <div className="table-shell">
         <table className="w-full text-sm">
@@ -45,7 +53,7 @@ export function OrgUsers() {
               <th className="px-4 py-2">Email</th>
               <th className="px-4 py-2">Role</th>
               <th className="px-4 py-2">Hotel</th>
-              {isAdmin && <th className="px-4 py-2"></th>}
+              <th className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-navy-800">
@@ -55,13 +63,13 @@ export function OrgUsers() {
                 <td className="px-4 py-2 text-ink-500">{u.email}</td>
                 <td className="px-4 py-2 text-ink-500">{u.role}</td>
                 <td className="px-4 py-2 text-ink-500 font-mono">{hotelCode(u.hotelId)}</td>
-                {isAdmin && (
-                  <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-right">
+                  {canEdit(u) && (
                     <button onClick={() => setEditingUser(u)} className="btn-ghost text-xs px-2.5 py-1.5">
                       Edit
                     </button>
-                  </td>
-                )}
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -83,6 +91,7 @@ export function OrgUsers() {
 
       {editingUser && (
         <EditUserModal
+          currentUser={currentUser}
           targetUser={editingUser}
           hotels={hotelsQuery.data ?? []}
           departments={departmentsQuery.data ?? []}
@@ -141,6 +150,8 @@ function CreateUserModal({
     onSuccess: onCreated,
   });
 
+  const errorMessage = createMutation.error instanceof Error ? createMutation.error.message : null;
+
   return (
     <Modal title="Add user" onClose={onClose}>
       <form
@@ -177,8 +188,8 @@ function CreateUserModal({
             <Field label="Role">
               <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
                 <option value="STAFF">Staff</option>
-                <option value="MANAGER">Manager</option>
-                <option value="ADMIN">Admin</option>
+                <option value="MANAGER">Manager (department + property admin)</option>
+                <option value="ADMIN">Admin (full organization access)</option>
               </select>
             </Field>
             <Field label="Department">
@@ -202,7 +213,7 @@ function CreateUserModal({
         )}
 
         {isAdmin && effectiveRole !== "ADMIN" && (
-          <Field label="Hotel">
+          <Field label="Hotel (property)">
             <select value={hotelId} onChange={(e) => setHotelId(e.target.value)} className="input-field">
               {hotels.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -213,7 +224,7 @@ function CreateUserModal({
           </Field>
         )}
 
-        {createMutation.isError && <p className="text-sm text-rose-400">Could not create user.</p>}
+        {errorMessage && <p className="text-sm text-rose-400">{errorMessage}</p>}
         <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel="Create" />
       </form>
     </Modal>
@@ -221,18 +232,22 @@ function CreateUserModal({
 }
 
 function EditUserModal({
+  currentUser,
   targetUser,
   hotels,
   departments,
   onClose,
   onSaved,
 }: {
+  currentUser: { role: Role; hotelId: string | null; departmentId: string | null };
   targetUser: AppUser;
   hotels: Hotel[];
   departments: Department[];
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const isAdmin = currentUser.role === "ADMIN";
+
   const [name, setName] = useState(targetUser.name);
   const [role, setRole] = useState<Role>(targetUser.role);
   const [hotelId, setHotelId] = useState(targetUser.hotelId ?? hotels[0]?.id ?? "");
@@ -243,15 +258,19 @@ function EditUserModal({
     mutationFn: () =>
       api.patch(`/users/${targetUser.id}`, {
         name,
-        role,
-        hotelId: role === "ADMIN" ? null : hotelId,
-        departmentId,
+        // A Manager can't change role/hotel/department — send the unchanged
+        // values so the backend sees "no change requested" for those fields.
+        role: isAdmin ? role : targetUser.role,
+        hotelId: isAdmin ? (role === "ADMIN" ? null : hotelId) : targetUser.hotelId,
+        departmentId: isAdmin ? departmentId : targetUser.departmentId,
         ...(newPassword ? { password: newPassword } : {}),
       }),
     onSuccess: onSaved,
   });
 
   const errorMessage = saveMutation.error instanceof Error ? saveMutation.error.message : null;
+  const hotelName = hotels.find((h) => h.id === targetUser.hotelId)?.code ?? "—";
+  const departmentName = departments.find((d) => d.id === targetUser.departmentId)?.name ?? "—";
 
   return (
     <Modal title={`Edit user · ${targetUser.name}`} onClose={onClose}>
@@ -269,31 +288,39 @@ function EditUserModal({
           <input value={targetUser.email} disabled className="input-field opacity-60 cursor-not-allowed" />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Role">
-            <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
-              <option value="STAFF">Staff</option>
-              <option value="MANAGER">Manager</option>
-              <option value="ADMIN">Admin</option>
-            </select>
+        {isAdmin ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Role">
+              <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
+                <option value="STAFF">Staff</option>
+                <option value="MANAGER">Manager (department + property admin)</option>
+                <option value="ADMIN">Admin (full organization access)</option>
+              </select>
+            </Field>
+            <Field label="Department">
+              <select
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="input-field"
+              >
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        ) : (
+          <Field label="Role · Department">
+            <p className="text-sm text-ink-300">
+              Staff · {departmentName} — as their Manager, you can't change a user's role or move them elsewhere.
+            </p>
           </Field>
-          <Field label="Department">
-            <select
-              value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value)}
-              className="input-field"
-            >
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
+        )}
 
-        {role !== "ADMIN" && (
-          <Field label="Hotel">
+        {isAdmin && role !== "ADMIN" && (
+          <Field label="Hotel (property)">
             <select value={hotelId} onChange={(e) => setHotelId(e.target.value)} className="input-field">
               {hotels.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -301,6 +328,11 @@ function EditUserModal({
                 </option>
               ))}
             </select>
+          </Field>
+        )}
+        {!isAdmin && (
+          <Field label="Hotel (property)">
+            <p className="text-sm text-ink-300 font-mono">{hotelName}</p>
           </Field>
         )}
 
