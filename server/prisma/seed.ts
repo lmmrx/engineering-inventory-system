@@ -10,16 +10,38 @@ const HOTELS = [
   { code: "YRDWS", name: "Holiday Inn & Suites Red Deer South" },
   { code: "YHTSS", name: "Holiday Inn Express Hotel & Suites Hinton" },
   { code: "YHTCA", name: "Holiday Inn Hinton" },
-  { code: "YHDEE", name: "Holiday Inn Express & Suites Edson" },
+  { code: "YETEX", name: "Holiday Inn Express & Suites Edson" },
 ];
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "ChangeMe123!";
 
-const STARTER_CATEGORIES: Record<string, string[]> = {
-  ENGINEERING: ["HVAC", "Plumbing", "Electrical", "General Maintenance", "Safety & PPE"],
-  HOUSEKEEPING: ["Linens & Towels", "Cleaning Supplies", "Guest Amenities", "Laundry Chemicals", "Equipment"],
-  GUEST_SERVICES: ["Front Desk Supplies", "Guest Amenities", "Stationery & Printing", "Lost & Found", "Uniforms"],
-  FOOD_BEVERAGE: ["Kitchen Supplies", "Bar & Beverage", "Tableware & Linens", "Cleaning & Sanitation", "Disposables"],
+// Two-level category hierarchy per department: group name -> subcategory names.
+const CATEGORY_STRUCTURE: Record<string, Record<string, string[]>> = {
+  ENGINEERING: {
+    "HVAC & R": ["Consumables", "Spares"],
+    "Electrical & Lighting Supplies": ["Lighting", "Wiring & Controls"],
+    "Plumbing & Water Systems": ["Fixtures", "Pipes & Fittings", "Water Treatment"],
+    "Mechanical & Plant Room Equipment": ["Boiler & Pumps", "Elevator / Lift"],
+    "Carpentry, Hardware & Building Fabric": ["Hardware", "Building Materials", "Finishes"],
+    "Tools, Safety & PPE (OS&E)": ["Hand & Power Tools", "PPE", "Safety Gear"],
+  },
+  HOUSEKEEPING: {
+    "Linen Inventory": ["Bed Linens", "Bath Linens", "Food & Beverage Linens"],
+    "Guest Amenities & Toiletries": ["Personal Care", "Vanity Items"],
+    "Cleaning Supplies & Chemicals": ["Chemicals", "Tools"],
+    "In-Room Operational Supplies": ["Paper Products", "Room Essentials"],
+  },
+  GUEST_SERVICES: {
+    "Front Desk & Concierge Supplies": ["Key Management", "Stationery & Printed Goods"],
+    "Guest Convenience & Retail Items": ["Marketplace / Pantry Stock", "Branded Merchandise"],
+    "Loaner Items & Guest Equipment": ["Room Additions", "Tech & Convenience"],
+  },
+  FOOD_BEVERAGE: {
+    "Perishable & Non-Perishable Food": ["Fresh Stock", "Dry Goods"],
+    Beverages: ["Alcoholic", "Non-Alcoholic"],
+    "Serviceware & Operating Equipment (OS&E)": ["Chinaware", "Glassware", "Flatware / Cutlery", "Hollowware"],
+    "Disposable & Takeout Supplies": ["Packaging", "Service Disposables"],
+  },
 };
 
 async function main() {
@@ -37,13 +59,26 @@ async function main() {
     ].map((dept) => prisma.department.upsert({ where: { code: dept.code }, update: {}, create: dept }))
   );
 
+  const categoriesByName: Record<string, { id: string }> = {};
+
   for (const dept of [engineering, ...otherDepartments]) {
-    for (const name of STARTER_CATEGORIES[dept.code] ?? []) {
-      await prisma.category.upsert({
-        where: { departmentId_name: { departmentId: dept.id, name } },
+    const groups = CATEGORY_STRUCTURE[dept.code] ?? {};
+    for (const [groupName, subNames] of Object.entries(groups)) {
+      const group = await prisma.category.upsert({
+        where: { departmentId_name: { departmentId: dept.id, name: groupName } },
         update: {},
-        create: { name, departmentId: dept.id },
+        create: { name: groupName, departmentId: dept.id },
       });
+      categoriesByName[groupName] = group;
+
+      for (const subName of subNames) {
+        const sub = await prisma.category.upsert({
+          where: { departmentId_name: { departmentId: dept.id, name: subName } },
+          update: {},
+          create: { name: subName, departmentId: dept.id, parentId: group.id },
+        });
+        categoriesByName[subName] = sub;
+      }
     }
   }
 
@@ -71,12 +106,6 @@ async function main() {
   });
 
   // A few starter items on the first hotel so the dashboard isn't empty on first login.
-  const hvac = await prisma.category.findFirstOrThrow({
-    where: { departmentId: engineering.id, name: "HVAC" },
-  });
-  const plumbing = await prisma.category.findFirstOrThrow({
-    where: { departmentId: engineering.id, name: "Plumbing" },
-  });
   await prisma.inventoryItem.upsert({
     where: { hotelId_sku: { hotelId: hotels[0].id, sku: "HVAC-FILTER-16x20" } },
     update: {},
@@ -89,7 +118,7 @@ async function main() {
       maxLevel: 40,
       hotelId: hotels[0].id,
       departmentId: engineering.id,
-      categoryId: hvac.id,
+      categoryId: categoriesByName["Consumables"].id,
     },
   });
   await prisma.inventoryItem.upsert({
@@ -104,7 +133,7 @@ async function main() {
       maxLevel: 20,
       hotelId: hotels[0].id,
       departmentId: engineering.id,
-      categoryId: plumbing.id,
+      categoryId: categoriesByName["Pipes & Fittings"].id,
     },
   });
 

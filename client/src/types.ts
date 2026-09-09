@@ -26,6 +26,7 @@ export interface Category {
   id: string;
   name: string;
   departmentId: string;
+  parentId?: string | null;
 }
 
 export interface InventoryItem {

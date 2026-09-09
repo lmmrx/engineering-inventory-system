@@ -87,6 +87,14 @@ model Category {
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id])
 
+  // A two-level hierarchy: a top-level group (parentId null, e.g. "Linen
+  // Inventory") containing subcategories (e.g. "Bed Linens", "Bath Linens").
+  // Items are filed under either level — groups aren't required to be
+  // purely organizational, since some departments don't need a subcategory.
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[] @relation("CategoryHierarchy")
+
   items InventoryItem[]
 
   @@unique([departmentId, name])

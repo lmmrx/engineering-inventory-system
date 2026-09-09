@@ -134,7 +134,12 @@ function AddItemModal({
   const [unit, setUnit] = useState("ea");
   const [quantityOnHand, setQuantityOnHand] = useState(0);
   const [reorderPoint, setReorderPoint] = useState(0);
-  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
+  // Default to the first selectable option: a childless group, or the first subcategory.
+  const firstSelectable =
+    categories.find((c) => !c.parentId && !categories.some((child) => child.parentId === c.id)) ??
+    categories.find((c) => c.parentId) ??
+    categories[0];
+  const [categoryId, setCategoryId] = useState(firstSelectable?.id ?? "");
   const [location, setLocation] = useState("");
 
   const createMutation = useMutation({
@@ -172,11 +177,27 @@ function AddItemModal({
             onChange={(e) => setCategoryId(e.target.value)}
             className="input-field"
           >
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
+            {categories
+              .filter((c) => !c.parentId)
+              .map((group) => {
+                const children = categories.filter((c) => c.parentId === group.id);
+                if (children.length === 0) {
+                  return (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  );
+                }
+                return (
+                  <optgroup key={group.id} label={group.name}>
+                    {children.map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                );
+              })}
           </select>
         </Field>
         <div className="grid grid-cols-2 gap-3">

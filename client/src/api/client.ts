@@ -63,6 +63,7 @@ export const api = {
     apiFetch<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
   async download(path: string, filename: string): Promise<void> {
     const headers: Record<string, string> = {};
     if (authToken) headers.Authorization = `Bearer ${authToken}`;
