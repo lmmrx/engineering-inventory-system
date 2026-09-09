@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { useAuth } from "../context/AuthContext";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
+import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { InventoryItem, PurchaseRequest } from "../types";
 import { RoleGate } from "../components/RoleGate";
 import { Modal, ModalActions } from "../components/Modal";
@@ -16,29 +16,33 @@ const statusColor: Record<string, string> = {
 
 export function PurchaseRequests() {
   const { selectedHotelId } = useHotelScope();
+  const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
 
   const requestsQuery = useQuery({
-    queryKey: ["purchase-requests", selectedHotelId],
-    queryFn: () =>
-      api.get<PurchaseRequest[]>(`/purchase-requests${viewingAllHotels ? "" : `?hotelId=${selectedHotelId}`}`),
-    enabled: !!selectedHotelId,
+    queryKey: ["purchase-requests", selectedHotelId, selectedDepartmentId],
+    queryFn: () => {
+      const params = new URLSearchParams({ departmentId: selectedDepartmentId });
+      if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
+      return api.get<PurchaseRequest[]>(`/purchase-requests?${params}`);
+    },
+    enabled: !!selectedHotelId && !!selectedDepartmentId,
   });
 
   const itemsQuery = useQuery({
-    queryKey: ["items", selectedHotelId],
-    queryFn: () => api.get<InventoryItem[]>(`/items${viewingAllHotels ? "" : `?hotelId=${selectedHotelId}`}`),
-    enabled: !!selectedHotelId && !viewingAllHotels,
+    queryKey: ["items", selectedHotelId, selectedDepartmentId],
+    queryFn: () =>
+      api.get<InventoryItem[]>(`/items?${new URLSearchParams({ hotelId: selectedHotelId, departmentId: selectedDepartmentId })}`),
+    enabled: !!selectedHotelId && !!selectedDepartmentId && !viewingAllHotels,
   });
 
   const [actionError, setActionError] = useState<string | null>(null);
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["purchase-requests", selectedHotelId] });
-    queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId] });
+    queryClient.invalidateQueries({ queryKey: ["purchase-requests", selectedHotelId, selectedDepartmentId] });
+    queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId, selectedDepartmentId] });
   }
 
   function handleActionError(err: unknown) {
@@ -154,7 +158,7 @@ export function PurchaseRequests() {
       {showCreate && (
         <CreateRequestModal
           hotelId={selectedHotelId}
-          departmentId={user!.departmentId!}
+          departmentId={selectedDepartmentId}
           items={itemsQuery.data ?? []}
           onClose={() => setShowCreate(false)}
           onCreated={() => {

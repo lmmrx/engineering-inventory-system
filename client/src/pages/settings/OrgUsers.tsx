@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
+import { useDepartmentScope } from "../../context/DepartmentScopeContext";
 import { AppUser, Department, Hotel, Role } from "../../types";
 import { Field, Modal, ModalActions } from "../../components/Modal";
 import { PasswordInput } from "../../components/PasswordInput";
@@ -110,6 +111,7 @@ function CreateUserModal({
   onCreated: () => void;
 }) {
   const isAdmin = currentUser.role === "ADMIN";
+  const { selectedDepartmentId } = useDepartmentScope();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -117,7 +119,7 @@ function CreateUserModal({
   const [role, setRole] = useState<Role>("STAFF");
   const [hotelId, setHotelId] = useState(isAdmin ? hotels[0]?.id ?? "" : currentUser.hotelId ?? "");
   const [departmentId, setDepartmentId] = useState(
-    isAdmin ? departments.find((d) => d.code === "ENGINEERING")?.id ?? departments[0]?.id ?? "" : currentUser.departmentId ?? ""
+    isAdmin ? selectedDepartmentId || departments[0]?.id || "" : currentUser.departmentId ?? ""
   );
 
   // A Manager may only ever create Staff users in their own hotel and department —

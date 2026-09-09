@@ -2,23 +2,27 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
+import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { InventoryItem, StockTransaction } from "../types";
 
 export function Dashboard() {
   const { selectedHotelId } = useHotelScope();
+  const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
   const hotelParam = viewingAllHotels ? "" : `hotelId=${selectedHotelId}&`;
+  const ready = !!selectedHotelId && !!selectedDepartmentId;
 
   const lowStockQuery = useQuery({
-    queryKey: ["items", "low-stock", selectedHotelId],
-    queryFn: () => api.get<InventoryItem[]>(`/items?${hotelParam}lowStockOnly=true`),
-    enabled: !!selectedHotelId,
+    queryKey: ["items", "low-stock", selectedHotelId, selectedDepartmentId],
+    queryFn: () =>
+      api.get<InventoryItem[]>(`/items?${hotelParam}departmentId=${selectedDepartmentId}&lowStockOnly=true`),
+    enabled: ready,
   });
 
   const activityQuery = useQuery({
-    queryKey: ["transactions", selectedHotelId],
-    queryFn: () => api.get<StockTransaction[]>(`/transactions?${hotelParam}`),
-    enabled: !!selectedHotelId,
+    queryKey: ["transactions", selectedHotelId, selectedDepartmentId],
+    queryFn: () => api.get<StockTransaction[]>(`/transactions?${hotelParam}departmentId=${selectedDepartmentId}`),
+    enabled: ready,
   });
 
   return (

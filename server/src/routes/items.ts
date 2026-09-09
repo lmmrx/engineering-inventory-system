@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
-import { requireAuth, requireRole, resolveHotelScope } from "../middleware/auth";
+import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const itemsRouter = Router();
 
@@ -12,11 +12,13 @@ itemsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const hotelId = resolveHotelScope(req);
+    const departmentId = resolveDepartmentScope(req);
     const { categoryId, lowStockOnly } = req.query;
 
     const items = await prisma.inventoryItem.findMany({
       where: {
         hotelId,
+        departmentId,
         categoryId: typeof categoryId === "string" ? categoryId : undefined,
       },
       include: { category: true, hotel: true },
@@ -39,6 +41,9 @@ itemsRouter.get(
 
     const hotelId = resolveHotelScope(req);
     if (hotelId && item.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
+
+    const departmentId = resolveDepartmentScope(req);
+    if (departmentId && item.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
 
     res.json(item);
   })

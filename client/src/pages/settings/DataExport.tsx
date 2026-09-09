@@ -1,20 +1,24 @@
 import { useState } from "react";
 import { api } from "../../api/client";
 import { useHotelScope } from "../../context/HotelScopeContext";
+import { useDepartmentScope } from "../../context/DepartmentScopeContext";
 
 export function DataExport() {
   const { hotels, selectedHotelId, canSwitchHotels } = useHotelScope();
+  const { departments, selectedDepartmentId } = useDepartmentScope();
   const [downloading, setDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const hotelCode = hotels.find((h) => h.id === selectedHotelId)?.code;
+  const departmentName = departments.find((d) => d.id === selectedDepartmentId)?.name ?? "your department";
 
   async function handleDownload(kind: "inventory" | "transactions") {
     setError(null);
     setDownloading(kind);
     try {
-      const scope = canSwitchHotels ? "" : `?hotelId=${selectedHotelId}`;
-      await api.download(`/export/${kind}${scope}`, `${kind}-export.csv`);
+      const params = new URLSearchParams({ departmentId: selectedDepartmentId });
+      if (!canSwitchHotels) params.set("hotelId", selectedHotelId);
+      await api.download(`/export/${kind}?${params}`, `${kind}-export.csv`);
     } catch {
       setError("Could not generate the export. Try again in a moment.");
     } finally {
@@ -27,8 +31,8 @@ export function DataExport() {
       <h2 className="font-semibold text-ink-100 mb-1">Export data</h2>
       <p className="text-sm text-ink-500 mb-5">
         {canSwitchHotels
-          ? "Download a CSV across all hotels."
-          : `Download a CSV for ${hotelCode ?? "your hotel"}.`}
+          ? `Download a CSV of ${departmentName} across all hotels.`
+          : `Download a CSV of ${departmentName} for ${hotelCode ?? "your hotel"}.`}
       </p>
 
       <div className="space-y-3">

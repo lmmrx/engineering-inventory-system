@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { useAuth } from "../context/AuthContext";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
+import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { WorkOrder, WorkOrderStatus } from "../types";
 import { Modal, ModalActions } from "../components/Modal";
 
@@ -14,19 +14,23 @@ const statusColor: Record<WorkOrderStatus, string> = {
 
 export function WorkOrders() {
   const { selectedHotelId } = useHotelScope();
+  const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
 
   const workOrdersQuery = useQuery({
-    queryKey: ["work-orders", selectedHotelId],
-    queryFn: () => api.get<WorkOrder[]>(`/work-orders${viewingAllHotels ? "" : `?hotelId=${selectedHotelId}`}`),
-    enabled: !!selectedHotelId,
+    queryKey: ["work-orders", selectedHotelId, selectedDepartmentId],
+    queryFn: () => {
+      const params = new URLSearchParams({ departmentId: selectedDepartmentId });
+      if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
+      return api.get<WorkOrder[]>(`/work-orders?${params}`);
+    },
+    enabled: !!selectedHotelId && !!selectedDepartmentId,
   });
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["work-orders", selectedHotelId] });
+    queryClient.invalidateQueries({ queryKey: ["work-orders", selectedHotelId, selectedDepartmentId] });
   }
 
   const advanceMutation = useMutation({
@@ -94,7 +98,7 @@ export function WorkOrders() {
       {showCreate && (
         <CreateWorkOrderModal
           hotelId={selectedHotelId}
-          departmentId={user!.departmentId!}
+          departmentId={selectedDepartmentId}
           onClose={() => setShowCreate(false)}
           onCreated={() => {
             setShowCreate(false);

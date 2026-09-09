@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { HotelScopeProvider } from "./context/HotelScopeContext";
+import { DepartmentScopeProvider } from "./context/DepartmentScopeContext";
 import { Layout } from "./components/Layout";
 import { RoleGate } from "./components/RoleGate";
 import { Login } from "./pages/Login";
@@ -22,6 +23,7 @@ import { ComingSoon } from "./pages/settings/ComingSoon";
 function ProtectedApp() {
   return (
     <HotelScopeProvider>
+      <DepartmentScopeProvider>
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
@@ -91,7 +93,7 @@ function ProtectedApp() {
                 <RoleGate roles={["ADMIN"]}>
                   <ComingSoon
                     title="Appearance"
-                    description="Engineering Inventory currently ships as a single dark theme by design. A configurable theme is not planned in the near term."
+                    description="Property Inventory currently ships as a single dark theme by design. A configurable theme is not planned in the near term."
                   />
                 </RoleGate>
               }
@@ -121,6 +123,7 @@ function ProtectedApp() {
           </Route>
         </Route>
       </Routes>
+      </DepartmentScopeProvider>
     </HotelScopeProvider>
   );
 }

@@ -2,7 +2,7 @@ import { Request, Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
-import { requireAuth, requireRole, resolveHotelScope } from "../middleware/auth";
+import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const purchaseRequestsRouter = Router();
 
@@ -12,8 +12,9 @@ purchaseRequestsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const hotelId = resolveHotelScope(req);
+    const departmentId = resolveDepartmentScope(req);
     const purchaseRequests = await prisma.purchaseRequest.findMany({
-      where: { hotelId },
+      where: { hotelId, departmentId },
       include: {
         items: { include: { item: true } },
         requestedBy: { select: { id: true, name: true } },
@@ -50,12 +51,19 @@ purchaseRequestsRouter.post(
     const hotelId = resolveHotelScope(req);
     if (hotelId && parsed.data.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
 
+    const departmentId = resolveDepartmentScope(req);
+    if (departmentId && parsed.data.departmentId !== departmentId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const items = await prisma.inventoryItem.findMany({
       where: { id: { in: parsed.data.items.map((i) => i.itemId) } },
     });
-    const invalid = items.find((i) => i.hotelId !== parsed.data.hotelId);
+    const invalid = items.find(
+      (i) => i.hotelId !== parsed.data.hotelId || i.departmentId !== parsed.data.departmentId
+    );
     if (items.length !== parsed.data.items.length || invalid) {
-      return res.status(400).json({ error: "One or more items do not belong to this hotel" });
+      return res.status(400).json({ error: "One or more items do not belong to this hotel and department" });
     }
 
     const { items: lines, ...rest } = parsed.data;
@@ -76,6 +84,8 @@ async function loadInScope(req: Request, id: string) {
   if (!purchaseRequest) return { error: 404 as const };
   const hotelId = resolveHotelScope(req);
   if (hotelId && purchaseRequest.hotelId !== hotelId) return { error: 403 as const };
+  const departmentId = resolveDepartmentScope(req);
+  if (departmentId && purchaseRequest.departmentId !== departmentId) return { error: 403 as const };
   return { purchaseRequest };
 }
 
@@ -131,6 +141,11 @@ purchaseRequestsRouter.patch(
 
     const hotelId = resolveHotelScope(req);
     if (hotelId && purchaseRequest.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
+
+    const departmentId = resolveDepartmentScope(req);
+    if (departmentId && purchaseRequest.departmentId !== departmentId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     if (purchaseRequest.status !== "APPROVED") {
       return res.status(400).json({ error: "Only approved purchase requests can be received" });

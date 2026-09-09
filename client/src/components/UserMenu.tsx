@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
+import { useDepartmentScope } from "../context/DepartmentScopeContext";
 
 function ChevronRight() {
   return (
@@ -30,20 +31,23 @@ function CheckIcon() {
 const menuItemClass =
   "flex items-center justify-between gap-2 w-full text-left px-3 py-2 text-sm text-ink-200 hover:bg-navy-800 rounded-md transition";
 
+type Panel = "main" | "property" | "department";
+
 export function UserMenu() {
   const { user, logout } = useAuth();
   const { hotels, selectedHotelId, setSelectedHotelId, canSwitchHotels } = useHotelScope();
+  const { departments, selectedDepartmentId, setSelectedDepartmentId, canSwitchDepartments } = useDepartmentScope();
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
-  const [showPropertyList, setShowPropertyList] = useState(false);
+  const [panel, setPanel] = useState<Panel>("main");
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
-        setShowPropertyList(false);
+        setPanel("main");
       }
     }
     if (open) document.addEventListener("mousedown", handleClickOutside);
@@ -54,13 +58,12 @@ export function UserMenu() {
 
   const initial = user.name.trim().charAt(0).toUpperCase() || "?";
   const currentHotelCode =
-    selectedHotelId === ALL_HOTELS
-      ? "All Hotels"
-      : hotels.find((h) => h.id === selectedHotelId)?.code ?? "—";
+    selectedHotelId === ALL_HOTELS ? "All Hotels" : hotels.find((h) => h.id === selectedHotelId)?.code ?? "—";
+  const currentDepartmentName = departments.find((d) => d.id === selectedDepartmentId)?.name ?? "—";
 
   function closeMenu() {
     setOpen(false);
-    setShowPropertyList(false);
+    setPanel("main");
   }
 
   function goTo(path: string) {
@@ -70,9 +73,7 @@ export function UserMenu() {
 
   return (
     <div className="relative flex-none flex items-center gap-1.5" ref={containerRef}>
-      <span className="hidden md:inline text-sm text-ink-200 font-mono whitespace-nowrap">
-        {currentHotelCode}
-      </span>
+      <span className="hidden md:inline text-sm text-ink-200 font-mono whitespace-nowrap">{currentHotelCode}</span>
 
       <button
         onClick={() => setOpen((v) => !v)}
@@ -89,10 +90,10 @@ export function UserMenu() {
             <p className="text-xs text-ink-500 truncate">{user.email}</p>
           </div>
 
-          {!showPropertyList ? (
+          {panel === "main" && (
             <div className="px-1.5 space-y-0.5">
               <button
-                onClick={() => (canSwitchHotels ? setShowPropertyList(true) : undefined)}
+                onClick={() => (canSwitchHotels ? setPanel("property") : undefined)}
                 className={`${menuItemClass} ${!canSwitchHotels ? "cursor-default hover:bg-transparent" : ""}`}
                 disabled={!canSwitchHotels}
               >
@@ -101,6 +102,18 @@ export function UserMenu() {
                   <span className="block font-mono">{currentHotelCode}</span>
                 </span>
                 {canSwitchHotels && <ChevronRight />}
+              </button>
+
+              <button
+                onClick={() => (canSwitchDepartments ? setPanel("department") : undefined)}
+                className={`${menuItemClass} ${!canSwitchDepartments ? "cursor-default hover:bg-transparent" : ""}`}
+                disabled={!canSwitchDepartments}
+              >
+                <span>
+                  <span className="block text-ink-500 text-xs">Department</span>
+                  <span className="block">{currentDepartmentName}</span>
+                </span>
+                {canSwitchDepartments && <ChevronRight />}
               </button>
 
               <div className="my-1 border-t border-navy-800" />
@@ -121,9 +134,11 @@ export function UserMenu() {
                 Sign out
               </button>
             </div>
-          ) : (
+          )}
+
+          {panel === "property" && (
             <div className="px-1.5">
-              <button onClick={() => setShowPropertyList(false)} className={`${menuItemClass} text-ink-500 mb-1`}>
+              <button onClick={() => setPanel("main")} className={`${menuItemClass} text-ink-500 mb-1`}>
                 <span className="flex items-center gap-1">
                   <ChevronLeft />
                   Property
@@ -133,7 +148,6 @@ export function UserMenu() {
                 <button
                   onClick={() => {
                     setSelectedHotelId(ALL_HOTELS);
-                    setShowPropertyList(false);
                     closeMenu();
                   }}
                   className={menuItemClass}
@@ -147,13 +161,38 @@ export function UserMenu() {
                     key={h.id}
                     onClick={() => {
                       setSelectedHotelId(h.id);
-                      setShowPropertyList(false);
                       closeMenu();
                     }}
                     className={menuItemClass}
                   >
                     <span className="font-mono">{h.code}</span>
                     {h.id === selectedHotelId && <CheckIcon />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {panel === "department" && (
+            <div className="px-1.5">
+              <button onClick={() => setPanel("main")} className={`${menuItemClass} text-ink-500 mb-1`}>
+                <span className="flex items-center gap-1">
+                  <ChevronLeft />
+                  Department
+                </span>
+              </button>
+              <div className="max-h-72 overflow-y-auto space-y-0.5">
+                {departments.map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => {
+                      setSelectedDepartmentId(d.id);
+                      closeMenu();
+                    }}
+                    className={menuItemClass}
+                  >
+                    <span>{d.name}</span>
+                    {d.id === selectedDepartmentId && <CheckIcon />}
                   </button>
                 ))}
               </div>

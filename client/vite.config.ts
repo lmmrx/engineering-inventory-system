@@ -12,9 +12,10 @@ export default defineConfig({
       // stock counts and alerts must always come from the network, never a
       // stale cache, so there's no runtimeCaching rule for them.
       manifest: {
-        name: "Engineering Inventory",
+        name: "Property Inventory",
         short_name: "Inventory",
-        description: "Multi-hotel inventory, purchase requests, and work orders for hospitality engineering teams.",
+        description:
+          "Multi-hotel inventory, purchase requests, and work orders for Engineering, Housekeeping, Guest Services, and Food & Beverage teams.",
         start_url: "/",
         display: "standalone",
         background_color: "#0d1117",

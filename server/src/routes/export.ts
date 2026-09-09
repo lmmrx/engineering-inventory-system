@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
-import { requireAuth, requireRole, resolveHotelScope } from "../middleware/auth";
+import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const exportRouter = Router();
 
@@ -20,8 +20,9 @@ exportRouter.get(
   "/inventory",
   asyncHandler(async (req, res) => {
     const hotelId = resolveHotelScope(req);
+    const departmentId = resolveDepartmentScope(req);
     const items = await prisma.inventoryItem.findMany({
-      where: { hotelId },
+      where: { hotelId, departmentId },
       include: { hotel: true, category: true },
       orderBy: [{ hotel: { name: "asc" } }, { name: "asc" }],
     });
@@ -50,8 +51,9 @@ exportRouter.get(
   "/transactions",
   asyncHandler(async (req, res) => {
     const hotelId = resolveHotelScope(req);
+    const departmentId = resolveDepartmentScope(req);
     const transactions = await prisma.stockTransaction.findMany({
-      where: { item: hotelId ? { hotelId } : undefined },
+      where: { item: hotelId || departmentId ? { hotelId, departmentId } : undefined },
       include: { item: { include: { hotel: true } }, performedBy: true },
       orderBy: { createdAt: "desc" },
       take: 5000,

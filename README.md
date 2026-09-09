@@ -1,8 +1,10 @@
-# Engineering Inventory Management System
+# Property Inventory Management System
 
-A multi-hotel inventory system for the Engineering department, built to expand to
-other departments (Housekeeping, Guest Services, Food & Beverage) later without
-a schema rewrite — `Department` is a first-class dimension on every record.
+A multi-hotel, multi-department inventory system. Every hotel has four live
+departments — Engineering, Housekeeping, Guest Services, and Food & Beverage —
+each with its own categories, inventory, purchase requests, and work orders.
+`Department` and `Hotel` are both first-class dimensions on every record, so
+adding a fifth department later is a data change, not a schema change.
 
 ## Stack
 
@@ -11,11 +13,13 @@ a schema rewrite — `Department` is a first-class dimension on every record.
 
 ## Features (v1)
 
-- Stock inventory per hotel with quantities, reorder points, and low-stock alerts
+- Stock inventory per hotel *and* department, with quantities, reorder points, and low-stock alerts
 - Stock in/out/adjustment transaction logging (full audit trail)
 - Purchase request workflow: request → approve/reject → receive
 - Work orders, with stock transactions linkable to a work order
-- Roles: Admin (all hotels), Manager (their hotel), Staff (day-to-day stock actions)
+- Admins switch between hotels ("Property") and departments from the account menu;
+  Managers/Staff are pinned to their own hotel and department
+- Roles: Admin (everything), Manager (their hotel + department), Staff (day-to-day stock actions)
 
 ## Running locally (free — no cloud account needed)
 
@@ -56,10 +60,9 @@ npm run db:seed
 ```
 
 The seed script creates:
-- 7 hotels (`Hotel 1`..`Hotel 7` — rename them under Admin → Hotels)
-- The `Engineering` department (plus `Housekeeping`, `Guest Services`,
-  `Food & Beverage` reserved for later rollout)
-- Starter categories (HVAC, Plumbing, Electrical, General Maintenance, Safety & PPE)
+- 7 hotels
+- All 4 departments — Engineering, Housekeeping, Guest Services, Food & Beverage —
+  each with a starter set of categories
 - One Admin login, printed to the console when the seed finishes
   (default: `admin@example.com` / `ChangeMe123!` — change this password after first login)
 
@@ -74,13 +77,26 @@ npm run dev:client   # Web app on http://localhost:5173
 
 Open http://localhost:5173 and log in with the seeded Admin account.
 
-## Adding a new department later
+## Switching hotels and departments
 
-1. The department already exists in the `Department` table (seeded but unused).
-2. Add categories for it via the Admin → Categories screen (select the new department).
+Only Admins can switch — everyone else is pinned to their own hotel and
+department. From the account menu (the avatar, top right):
+
+- **Property** — pick a specific hotel, or **All Hotels** to see inventory,
+  purchase requests, and work orders combined across every property.
+- **Department** — pick which department's data to view/manage. There's no
+  "All Departments" mode, since a Housekeeping linen count and an Engineering
+  HVAC filter count aren't meaningful mixed together — always exactly one
+  department at a time.
+
+## Adding a fifth department later
+
+1. Add a row to the `Department` table (a migration, or directly).
+2. Add categories for it via Settings → Categories (switch to that department
+   first via the account menu, then add categories).
 3. Create Manager/Staff users scoped to that department.
-4. The Inventory, Purchase Requests, and Work Orders screens work unchanged —
-   they're scoped by hotel + department already.
+4. Everything else — Inventory, Purchase Requests, Work Orders, exports — works
+   unchanged, since every one of those is scoped by hotel + department already.
 
 ## Deploying live, for free
 

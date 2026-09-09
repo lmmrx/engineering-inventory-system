@@ -1,25 +1,27 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
-import { useAuth } from "../../context/AuthContext";
+import { useDepartmentScope } from "../../context/DepartmentScopeContext";
 import { Category } from "../../types";
 
 export function OrgCategories() {
-  const { user } = useAuth();
+  const { departments, selectedDepartmentId } = useDepartmentScope();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
 
+  const departmentName = departments.find((d) => d.id === selectedDepartmentId)?.name ?? "";
+
   const categoriesQuery = useQuery({
-    queryKey: ["categories", user?.departmentId],
-    queryFn: () => api.get<Category[]>(`/categories?departmentId=${user?.departmentId}`),
-    enabled: !!user?.departmentId,
+    queryKey: ["categories", selectedDepartmentId],
+    queryFn: () => api.get<Category[]>(`/categories?departmentId=${selectedDepartmentId}`),
+    enabled: !!selectedDepartmentId,
   });
 
   const createMutation = useMutation({
-    mutationFn: () => api.post("/categories", { name, departmentId: user!.departmentId }),
+    mutationFn: () => api.post("/categories", { name, departmentId: selectedDepartmentId }),
     onSuccess: () => {
       setName("");
-      queryClient.invalidateQueries({ queryKey: ["categories", user?.departmentId] });
+      queryClient.invalidateQueries({ queryKey: ["categories", selectedDepartmentId] });
     },
   });
 
@@ -28,7 +30,10 @@ export function OrgCategories() {
   return (
     <div>
       <h2 className="font-semibold text-ink-100 mb-1">Categories</h2>
-      <p className="text-sm text-ink-500 mb-4">Organize inventory items into categories within your department.</p>
+      <p className="text-sm text-ink-500 mb-4">
+        Organize inventory items into categories within <span className="text-ink-300">{departmentName}</span>.
+        Switch departments from the account menu to manage a different one.
+      </p>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -53,6 +58,9 @@ export function OrgCategories() {
             {c.name}
           </li>
         ))}
+        {categoriesQuery.data?.length === 0 && (
+          <li className="px-4 py-2 text-sm text-ink-500">No categories yet in this department.</li>
+        )}
       </ul>
     </div>
   );

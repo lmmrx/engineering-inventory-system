@@ -15,13 +15,12 @@ const HOTELS = [
 const ADMIN_EMAIL = "admin@example.com";
 const ADMIN_PASSWORD = "ChangeMe123!";
 
-const ENGINEERING_CATEGORIES = [
-  "HVAC",
-  "Plumbing",
-  "Electrical",
-  "General Maintenance",
-  "Safety & PPE",
-];
+const STARTER_CATEGORIES: Record<string, string[]> = {
+  ENGINEERING: ["HVAC", "Plumbing", "Electrical", "General Maintenance", "Safety & PPE"],
+  HOUSEKEEPING: ["Linens & Towels", "Cleaning Supplies", "Guest Amenities", "Laundry Chemicals", "Equipment"],
+  GUEST_SERVICES: ["Front Desk Supplies", "Guest Amenities", "Stationery & Printing", "Lost & Found", "Uniforms"],
+  FOOD_BEVERAGE: ["Kitchen Supplies", "Bar & Beverage", "Tableware & Linens", "Cleaning & Sanitation", "Disposables"],
+};
 
 async function main() {
   const engineering = await prisma.department.upsert({
@@ -30,17 +29,22 @@ async function main() {
     create: { name: "Engineering", code: "ENGINEERING" },
   });
 
-  // Reserved for future rollout — created now so expansion is a data change, not a schema change.
-  for (const dept of [
-    { name: "Housekeeping", code: "HOUSEKEEPING" },
-    { name: "Guest Services", code: "GUEST_SERVICES" },
-    { name: "Food & Beverage", code: "FOOD_BEVERAGE" },
-  ]) {
-    await prisma.department.upsert({
-      where: { code: dept.code },
-      update: {},
-      create: dept,
-    });
+  const otherDepartments = await Promise.all(
+    [
+      { name: "Housekeeping", code: "HOUSEKEEPING" },
+      { name: "Guest Services", code: "GUEST_SERVICES" },
+      { name: "Food & Beverage", code: "FOOD_BEVERAGE" },
+    ].map((dept) => prisma.department.upsert({ where: { code: dept.code }, update: {}, create: dept }))
+  );
+
+  for (const dept of [engineering, ...otherDepartments]) {
+    for (const name of STARTER_CATEGORIES[dept.code] ?? []) {
+      await prisma.category.upsert({
+        where: { departmentId_name: { departmentId: dept.id, name } },
+        update: {},
+        create: { name, departmentId: dept.id },
+      });
+    }
   }
 
   const hotels = [];
@@ -51,16 +55,6 @@ async function main() {
       create: { name, code },
     });
     hotels.push(hotel);
-  }
-
-  const categories = [];
-  for (const name of ENGINEERING_CATEGORIES) {
-    const category = await prisma.category.upsert({
-      where: { departmentId_name: { departmentId: engineering.id, name } },
-      update: {},
-      create: { name, departmentId: engineering.id },
-    });
-    categories.push(category);
   }
 
   const passwordHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
@@ -77,8 +71,12 @@ async function main() {
   });
 
   // A few starter items on the first hotel so the dashboard isn't empty on first login.
-  const hvac = categories.find((c) => c.name === "HVAC")!;
-  const plumbing = categories.find((c) => c.name === "Plumbing")!;
+  const hvac = await prisma.category.findFirstOrThrow({
+    where: { departmentId: engineering.id, name: "HVAC" },
+  });
+  const plumbing = await prisma.category.findFirstOrThrow({
+    where: { departmentId: engineering.id, name: "Plumbing" },
+  });
   await prisma.inventoryItem.upsert({
     where: { hotelId_sku: { hotelId: hotels[0].id, sku: "HVAC-FILTER-16x20" } },
     update: {},

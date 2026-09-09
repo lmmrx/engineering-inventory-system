@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
-import { requireAuth, resolveHotelScope } from "../middleware/auth";
+import { requireAuth, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const workOrdersRouter = Router();
 
@@ -12,8 +12,9 @@ workOrdersRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const hotelId = resolveHotelScope(req);
+    const departmentId = resolveDepartmentScope(req);
     const workOrders = await prisma.workOrder.findMany({
-      where: { hotelId },
+      where: { hotelId, departmentId },
       include: {
         createdBy: { select: { id: true, name: true } },
         assignedTo: { select: { id: true, name: true } },
@@ -37,6 +38,9 @@ workOrdersRouter.get(
     const hotelId = resolveHotelScope(req);
     if (hotelId && workOrder.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
 
+    const departmentId = resolveDepartmentScope(req);
+    if (departmentId && workOrder.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
+
     res.json(workOrder);
   })
 );
@@ -57,6 +61,9 @@ workOrdersRouter.post(
 
     const hotelId = resolveHotelScope(req);
     if (hotelId && parsed.data.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
+
+    const departmentId = resolveDepartmentScope(req);
+    if (departmentId && parsed.data.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
 
     const workOrder = await prisma.workOrder.create({
       data: { ...parsed.data, createdByUserId: req.user!.userId },
@@ -83,6 +90,9 @@ workOrdersRouter.patch(
 
     const hotelId = resolveHotelScope(req);
     if (hotelId && existing.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
+
+    const departmentId = resolveDepartmentScope(req);
+    if (departmentId && existing.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
 
     const data = { ...parsed.data } as Record<string, unknown>;
     if (parsed.data.status === "COMPLETED") data.completedAt = new Date();

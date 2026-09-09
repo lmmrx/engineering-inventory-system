@@ -16,7 +16,7 @@ export function Layout() {
           <div className="flex items-center gap-2 flex-none pr-6">
             <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-7 w-auto flex-none" />
             <span className="font-semibold text-ink-100 whitespace-nowrap hidden sm:inline pl-1.5">
-              Engineering Inventory
+              Property Inventory
             </span>
           </div>
 

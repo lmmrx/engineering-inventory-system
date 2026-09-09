@@ -1,30 +1,34 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { useAuth } from "../context/AuthContext";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
+import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { Category, InventoryItem, TransactionType } from "../types";
 import { RoleGate } from "../components/RoleGate";
 import { Field, Modal, ModalActions } from "../components/Modal";
 
 export function Inventory() {
-  const { user } = useAuth();
   const { selectedHotelId } = useHotelScope();
+  const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
   const queryClient = useQueryClient();
   const [showAddItem, setShowAddItem] = useState(false);
   const [stockModalItem, setStockModalItem] = useState<InventoryItem | null>(null);
 
   const itemsQuery = useQuery({
-    queryKey: ["items", selectedHotelId],
-    queryFn: () => api.get<InventoryItem[]>(`/items${viewingAllHotels ? "" : `?hotelId=${selectedHotelId}`}`),
-    enabled: !!selectedHotelId,
+    queryKey: ["items", selectedHotelId, selectedDepartmentId],
+    queryFn: () => {
+      const params = new URLSearchParams({ departmentId: selectedDepartmentId });
+      if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
+      return api.get<InventoryItem[]>(`/items?${params}`);
+    },
+    enabled: !!selectedHotelId && !!selectedDepartmentId,
   });
 
   const categoriesQuery = useQuery({
-    queryKey: ["categories", user?.departmentId],
-    queryFn: () => api.get<Category[]>(`/categories?departmentId=${user?.departmentId}`),
-    enabled: !!user?.departmentId,
+    queryKey: ["categories", selectedDepartmentId],
+    queryFn: () => api.get<Category[]>(`/categories?departmentId=${selectedDepartmentId}`),
+    enabled: !!selectedDepartmentId,
   });
 
   return (
@@ -87,12 +91,12 @@ export function Inventory() {
       {showAddItem && (
         <AddItemModal
           hotelId={selectedHotelId}
-          departmentId={user!.departmentId!}
+          departmentId={selectedDepartmentId}
           categories={categoriesQuery.data ?? []}
           onClose={() => setShowAddItem(false)}
           onCreated={() => {
             setShowAddItem(false);
-            queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId] });
+            queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId, selectedDepartmentId] });
           }}
         />
       )}
@@ -103,7 +107,7 @@ export function Inventory() {
           onClose={() => setStockModalItem(null)}
           onDone={() => {
             setStockModalItem(null);
-            queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId] });
+            queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId, selectedDepartmentId] });
             queryClient.invalidateQueries({ queryKey: ["transactions", selectedHotelId] });
           }}
         />
