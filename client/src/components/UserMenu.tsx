@@ -82,9 +82,9 @@ export function UserMenu() {
         className="hidden md:inline text-sm text-ink-200 whitespace-nowrap"
         style={{ minWidth: `${headerLabelWidth}ch` }}
       >
-        <span className="font-mono">{currentHotelCode}</span>
-        <span className="text-ink-600"> · </span>
         <span>{currentDepartmentName}</span>
+        <span className="text-ink-600"> · </span>
+        <span className="font-mono">{currentHotelCode}</span>
       </span>
 
       <button
