@@ -40,8 +40,8 @@ export function PasswordInput({ className = "", ...props }: InputHTMLAttributes<
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        className="absolute inset-y-0 right-0 flex items-center px-2.5 text-ink-500 hover:text-ink-200"
-        tabIndex={-1}
+        className="absolute inset-y-0 right-0 flex items-center px-2.5 rounded-r-md text-ink-500 hover:text-ink-200 focus-visible:outline-none focus-visible:text-ink-200 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500/50"
+        aria-pressed={visible}
         aria-label={visible ? "Hide password" : "Show password"}
       >
         <EyeIcon open={visible} />

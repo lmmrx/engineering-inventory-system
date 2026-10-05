@@ -4,6 +4,9 @@ import { HotelScopeProvider } from "./context/HotelScopeContext";
 import { DepartmentScopeProvider } from "./context/DepartmentScopeContext";
 import { Layout } from "./components/Layout";
 import { RoleGate } from "./components/RoleGate";
+import { Spinner } from "./components/Spinner";
+import { useTakingLong } from "./hooks/useTakingLong";
+import zsHoldingsLogo from "./assets/logo-zsholdings.png";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Inventory } from "./pages/Inventory";
@@ -128,11 +131,30 @@ function ProtectedApp() {
   );
 }
 
+function LoadingScreen() {
+  const takingLong = useTakingLong(true);
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4 text-center">
+      <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-14 w-auto" />
+      <div className="flex items-center gap-2 text-sm text-ink-500" aria-live="polite">
+        <Spinner />
+        Loading...
+      </div>
+      {takingLong && (
+        <p className="text-xs text-ink-500 max-w-xs">
+          Waking up the server — this can take up to a minute after a quiet period.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function App() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center text-slate-500">Loading...</div>;
+    return <LoadingScreen />;
   }
 
   if (!user) {

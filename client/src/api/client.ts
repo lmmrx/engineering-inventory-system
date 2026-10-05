@@ -57,6 +57,36 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return res.json() as Promise<T>;
 }
 
+// Render's free tier spins the API down after 15 minutes idle, so the first
+// request after a quiet period can take 20-50s to wake it back up. Firing
+// this as soon as the login page mounts hides most of that behind the time
+// the user spends typing their credentials. /health/db also opens a DB
+// connection, so a cold database is woken at the same time.
+export function warmUp() {
+  fetch(`${API_URL}/health/db`).catch(() => {
+    // ignore - this is best-effort, the real request will still retry
+  });
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// A cold API or DB shows up as a network error or a 5xx, not a real answer.
+// Retry those with a growing delay; any 4xx is the server actually replying,
+// so it's rethrown immediately. Only wrap requests that are safe to repeat.
+export async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isClientError = err instanceof ApiError && err.status < 500;
+      if (isClientError || attempt >= maxAttempts) throw err;
+      await sleep(attempt * 3000);
+    }
+  }
+}
+
 export const api = {
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body?: unknown) =>

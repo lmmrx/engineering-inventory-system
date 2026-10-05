@@ -12,6 +12,16 @@
   ::selection {
     @apply bg-gold-500 text-ink-100;
   }
+  /* Browsers paint autofilled inputs pale blue/yellow, which clashes with the
+     dark inputs; an inset shadow is the only reliable way to override it. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: theme("colors.ink.100");
+    -webkit-box-shadow: 0 0 0 1000px theme("colors.navy.950") inset;
+    caret-color: theme("colors.ink.100");
+    transition: background-color 9999s ease-out 0s;
+  }
 }
 
 @layer components {

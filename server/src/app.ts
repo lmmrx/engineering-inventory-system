@@ -40,6 +40,16 @@ export function createApp() {
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
+  // Also touches the database, so the client's warm-up ping wakes a cold
+  // free-tier DB connection as well as the API process itself.
+  app.get(
+    "/health/db",
+    asyncHandler(async (_req, res) => {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ ok: true });
+    })
+  );
+
   app.use("/auth", authRouter);
   app.use("/hotels", hotelsRouter);
   app.use("/users", usersRouter);

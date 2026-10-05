@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { api, getAuthToken, setAuthToken } from "../api/client";
+import { api, ApiError, getAuthToken, setAuthToken, withRetry } from "../api/client";
 import { CurrentUser } from "../types";
 
 interface AuthContextValue {
@@ -21,18 +21,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    api
-      .get<CurrentUser>("/me")
-      .then(setUser)
-      .catch(() => setAuthToken(null))
+    // Retried because a cold API/DB fails like a network error. Only a real
+    // rejection (401/403) or a deleted account (null) means the saved token
+    // is bad - anything else keeps it so the next visit can still restore it.
+    withRetry(() => api.get<CurrentUser | null>("/me"))
+      .then((me) => {
+        if (me) setUser(me);
+        else setAuthToken(null);
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+          setAuthToken(null);
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
   async function login(email: string, password: string) {
-    const { token, user } = await api.post<{ token: string; user: CurrentUser }>("/auth/login", {
-      email,
-      password,
-    });
+    // The free-tier API/DB can be cold on the first request after a quiet
+    // period; withRetry covers that so the user doesn't have to re-submit.
+    const { token, user } = await withRetry(() =>
+      api.post<{ token: string; user: CurrentUser }>("/auth/login", { email, password })
+    );
     setAuthToken(token);
     setUser(user);
   }
