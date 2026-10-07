@@ -36,7 +36,10 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
   },
   {
     label: "Data",
-    items: [{ to: "data", label: "Export data", roles: ["ADMIN", "MANAGER"] }],
+    items: [
+      { to: "data", label: "Export data", roles: ["ADMIN", "MANAGER"] },
+      { to: "audit-log", label: "Audit log", roles: ["ADMIN", "MANAGER"] },
+    ],
   },
   {
     label: "Platform",

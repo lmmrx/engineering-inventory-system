@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
+import { audit, created, diff } from "../lib/audit";
 import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const itemsRouter = Router();
@@ -89,6 +90,14 @@ itemsRouter.post(
     }
 
     const item = await prisma.inventoryItem.create({ data: parsed.data });
+    await audit(req, {
+      action: "item.created",
+      entityId: item.id,
+      summary: `Created item ${item.name}`,
+      changes: await created(item, ["name", "sku", "unit", "quantityOnHand", "reorderPoint", "maxLevel", "unitCost", "location", "hotelId", "departmentId", "categoryId"]),
+      hotelId: item.hotelId,
+      departmentId: item.departmentId,
+    });
     res.status(201).json(item);
   })
 );
@@ -128,6 +137,17 @@ itemsRouter.patch(
     }
 
     const item = await prisma.inventoryItem.update({ where: { id: req.params.id }, data: parsed.data });
+    const changes = await diff(existing, item, ["name", "sku", "unit", "quantityOnHand", "reorderPoint", "maxLevel", "unitCost", "location", "hotelId", "departmentId", "categoryId"]);
+    if (Object.keys(changes).length > 0) {
+      await audit(req, {
+        action: "item.updated",
+        entityId: item.id,
+        summary: `Updated item ${item.name}`,
+        changes,
+        hotelId: item.hotelId,
+        departmentId: item.departmentId,
+      });
+    }
     res.json(item);
   })
 );

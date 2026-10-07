@@ -1,8 +1,10 @@
 import cors from "cors";
 import express, { NextFunction, Request, Response } from "express";
 import { z } from "zod";
+import { auditLogsRouter } from "./routes/auditLogs";
 import { authRouter } from "./routes/auth";
 import { categoriesRouter } from "./routes/categories";
+import { dashboardRouter } from "./routes/dashboard";
 import { exportRouter } from "./routes/export";
 import { hotelsRouter } from "./routes/hotels";
 import { itemsRouter } from "./routes/items";
@@ -12,10 +14,14 @@ import { usersRouter } from "./routes/users";
 import { workOrdersRouter } from "./routes/workOrders";
 import { requireAuth } from "./middleware/auth";
 import { asyncHandler } from "./lib/asyncHandler";
+import { audit, diff } from "./lib/audit";
 import { prisma } from "./lib/prisma";
 
 export function createApp() {
   const app = express();
+  // Render terminates TLS in one proxy hop; trusting it makes req.ip the
+  // caller's address (recorded in the audit log) instead of the proxy's.
+  app.set("trust proxy", 1);
 
   // CLIENT_ORIGIN may list several allowed origins, comma-separated (a Vercel
   // project commonly has more than one valid domain — a production alias, an
@@ -59,6 +65,8 @@ export function createApp() {
   app.use("/work-orders", workOrdersRouter);
   app.use("/purchase-requests", purchaseRequestsRouter);
   app.use("/export", exportRouter);
+  app.use("/dashboard", dashboardRouter);
+  app.use("/audit-logs", auditLogsRouter);
 
   app.get(
     "/departments",
@@ -90,11 +98,22 @@ export function createApp() {
       const parsed = updateMeSchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
+      const before = await prisma.user.findUnique({ where: { id: req.user!.userId } });
       const user = await prisma.user.update({
         where: { id: req.user!.userId },
         data: { name: parsed.data.name },
         select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true },
       });
+      if (before && before.name !== user.name) {
+        await audit(req, {
+          action: "user.updated",
+          entityId: user.id,
+          summary: `${before.name} renamed themselves to ${user.name}`,
+          changes: await diff(before, { ...before, name: user.name }, ["name"]),
+          hotelId: user.hotelId,
+          departmentId: user.departmentId,
+        });
+      }
       res.json(user);
     })
   );

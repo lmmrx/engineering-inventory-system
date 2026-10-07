@@ -21,6 +21,7 @@ import { OrgCategories } from "./pages/settings/OrgCategories";
 import { OrgDepartments } from "./pages/settings/OrgDepartments";
 import { RolesPermissions } from "./pages/settings/RolesPermissions";
 import { DataExport } from "./pages/settings/DataExport";
+import { AuditLog } from "./pages/settings/AuditLog";
 import { ComingSoon } from "./pages/settings/ComingSoon";
 
 function ProtectedApp() {
@@ -76,6 +77,14 @@ function ProtectedApp() {
               element={
                 <RoleGate roles={["ADMIN", "MANAGER"]}>
                   <DataExport />
+                </RoleGate>
+              }
+            />
+            <Route
+              path="audit-log"
+              element={
+                <RoleGate roles={["ADMIN", "MANAGER"]}>
+                  <AuditLog />
                 </RoleGate>
               }
             />

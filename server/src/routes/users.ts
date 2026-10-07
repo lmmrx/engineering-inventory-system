@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
+import { audit, created, diff } from "../lib/audit";
 import { requireAuth, requireRole } from "../middleware/auth";
 
 export const usersRouter = Router();
@@ -79,6 +80,14 @@ usersRouter.post(
       },
       select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true },
     });
+    await audit(req, {
+      action: "user.created",
+      entityId: user.id,
+      summary: `Created user ${user.name} (${user.email}) as ${user.role}`,
+      changes: await created(user, ["name", "email", "role", "hotelId", "departmentId"]),
+      hotelId: user.hotelId,
+      departmentId: user.departmentId,
+    });
     res.status(201).json(user);
   })
 );
@@ -127,6 +136,24 @@ usersRouter.patch(
       data,
       select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true },
     });
+
+    const changes = await diff(existing, user, ["name", "role", "hotelId", "departmentId"]);
+    // Never log the password itself — only that it was reset.
+    if (password) changes.password = { from: null, to: "reset" };
+    if (Object.keys(changes).length > 0) {
+      await audit(req, {
+        action: "user.updated",
+        entityId: user.id,
+        summary: changes.role
+          ? `Changed ${user.name}'s role from ${existing.role} to ${user.role}`
+          : password && Object.keys(changes).length === 1
+          ? `Reset password for ${user.name}`
+          : `Updated user ${user.name}`,
+        changes,
+        hotelId: user.hotelId,
+        departmentId: user.departmentId,
+      });
+    }
     res.json(user);
   })
 );

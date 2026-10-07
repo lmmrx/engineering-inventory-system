@@ -2,6 +2,7 @@ import { Request, Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
+import { audit, created, diff, recordRef } from "../lib/audit";
 import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const purchaseRequestsRouter = Router();
@@ -75,6 +76,15 @@ purchaseRequestsRouter.post(
       },
       include: { items: { include: { item: true } } },
     });
+    await audit(req, {
+      action: "purchase_request.created",
+      entityId: purchaseRequest.id,
+      summary: `Requested ${purchaseRequest.items
+        .map((line) => `${line.quantityRequested} ${line.item.unit} ${line.item.name}`)
+        .join(", ")} (${recordRef("PR", purchaseRequest.id)})`,
+      hotelId: purchaseRequest.hotelId,
+      departmentId: purchaseRequest.departmentId,
+    });
     res.status(201).json(purchaseRequest);
   })
 );
@@ -99,7 +109,15 @@ purchaseRequestsRouter.patch(
 
     const purchaseRequest = await prisma.purchaseRequest.update({
       where: { id: req.params.id },
-      data: { status: "APPROVED", approvedByUserId: req.user!.userId },
+      data: { status: "APPROVED", approvedByUserId: req.user!.userId, decidedAt: new Date() },
+    });
+    await audit(req, {
+      action: "purchase_request.approved",
+      entityId: purchaseRequest.id,
+      summary: `Approved purchase request ${recordRef("PR", purchaseRequest.id)}`,
+      changes: { status: { from: result.purchaseRequest!.status, to: purchaseRequest.status } },
+      hotelId: purchaseRequest.hotelId,
+      departmentId: purchaseRequest.departmentId,
     });
     res.json(purchaseRequest);
   })
@@ -115,7 +133,15 @@ purchaseRequestsRouter.patch(
 
     const purchaseRequest = await prisma.purchaseRequest.update({
       where: { id: req.params.id },
-      data: { status: "REJECTED", approvedByUserId: req.user!.userId },
+      data: { status: "REJECTED", approvedByUserId: req.user!.userId, decidedAt: new Date() },
+    });
+    await audit(req, {
+      action: "purchase_request.rejected",
+      entityId: purchaseRequest.id,
+      summary: `Rejected purchase request ${recordRef("PR", purchaseRequest.id)}`,
+      changes: { status: { from: result.purchaseRequest!.status, to: purchaseRequest.status } },
+      hotelId: purchaseRequest.hotelId,
+      departmentId: purchaseRequest.departmentId,
     });
     res.json(purchaseRequest);
   })
@@ -181,13 +207,31 @@ purchaseRequestsRouter.patch(
         })
       );
     }
-    ops.push(prisma.purchaseRequest.update({ where: { id: purchaseRequest.id }, data: { status: "RECEIVED" } }));
+    ops.push(
+      prisma.purchaseRequest.update({
+        where: { id: purchaseRequest.id },
+        data: { status: "RECEIVED", receivedAt: new Date() },
+      })
+    );
 
     await prisma.$transaction(ops);
 
     const updated = await prisma.purchaseRequest.findUnique({
       where: { id: purchaseRequest.id },
       include: { items: { include: { item: true } } },
+    });
+    const received = updated!.items.filter((line) => line.quantityReceived > 0);
+    await audit(req, {
+      action: "purchase_request.received",
+      entityId: purchaseRequest.id,
+      summary: `Received purchase request ${recordRef("PR", purchaseRequest.id)}: ${
+        received.length > 0
+          ? received.map((line) => `${line.quantityReceived}/${line.quantityRequested} ${line.item.name}`).join(", ")
+          : "nothing received"
+      }`,
+      changes: { status: { from: purchaseRequest.status, to: "RECEIVED" } },
+      hotelId: purchaseRequest.hotelId,
+      departmentId: purchaseRequest.departmentId,
     });
     res.json(updated);
   })

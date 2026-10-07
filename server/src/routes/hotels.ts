@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
+import { audit, created, diff } from "../lib/audit";
 import { requireAuth, requireRole } from "../middleware/auth";
 
 export const hotelsRouter = Router();
@@ -41,6 +42,13 @@ hotelsRouter.post(
     if (existing) return res.status(409).json({ error: "A hotel with this code already exists" });
 
     const hotel = await prisma.hotel.create({ data: parsed.data });
+    await audit(req, {
+      action: "hotel.created",
+      entityId: hotel.id,
+      summary: `Created hotel ${hotel.name} (${hotel.code})`,
+      changes: await created(hotel, ["name", "code", "address"]),
+      hotelId: hotel.id,
+    });
     res.status(201).json(hotel);
   })
 );
@@ -63,6 +71,16 @@ hotelsRouter.patch(
     }
 
     const hotel = await prisma.hotel.update({ where: { id: req.params.id }, data: parsed.data });
+    const changes = await diff(existing, hotel, ["name", "code", "address"]);
+    if (Object.keys(changes).length > 0) {
+      await audit(req, {
+        action: "hotel.updated",
+        entityId: hotel.id,
+        summary: `Updated hotel ${hotel.name}`,
+        changes,
+        hotelId: hotel.id,
+      });
+    }
     res.json(hotel);
   })
 );

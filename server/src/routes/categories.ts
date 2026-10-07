@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
+import { audit, created, diff } from "../lib/audit";
 import { requireAuth, requireRole } from "../middleware/auth";
 
 export const categoriesRouter = Router();
@@ -64,6 +65,13 @@ categoriesRouter.post(
     if (parentError) return res.status(400).json({ error: parentError });
 
     const category = await prisma.category.create({ data: parsed.data });
+    await audit(req, {
+      action: "category.created",
+      entityId: category.id,
+      summary: `Created category ${category.name}`,
+      changes: await created(category, ["name", "parentId"]),
+      departmentId: category.departmentId,
+    });
     res.status(201).json(category);
   })
 );
@@ -115,6 +123,16 @@ categoriesRouter.patch(
     }
 
     const category = await prisma.category.update({ where: { id: req.params.id }, data: parsed.data });
+    const changes = await diff(existing, category, ["name", "parentId", "departmentId"]);
+    if (Object.keys(changes).length > 0) {
+      await audit(req, {
+        action: "category.updated",
+        entityId: category.id,
+        summary: `Updated category ${category.name}`,
+        changes,
+        departmentId: category.departmentId,
+      });
+    }
     res.json(category);
   })
 );
@@ -146,6 +164,15 @@ categoriesRouter.delete(
 
     // Deleting a group cascades to its (now-empty) subcategories at the DB level.
     await prisma.category.delete({ where: { id: existing.id } });
+    await audit(req, {
+      action: "category.deleted",
+      entityId: existing.id,
+      summary:
+        existing.children.length > 0
+          ? `Deleted category group ${existing.name} and its ${existing.children.length} subcategories (${existing.children.map((c) => c.name).join(", ")})`
+          : `Deleted category ${existing.name}`,
+      departmentId: existing.departmentId,
+    });
     res.status(204).send();
   })
 );

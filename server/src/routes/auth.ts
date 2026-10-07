@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { signToken } from "../lib/auth";
+import { audit } from "../lib/audit";
 import { requireAuth } from "../middleware/auth";
 
 export const authRouter = Router();
@@ -24,13 +25,31 @@ authRouter.post(
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
+      await audit(req, { action: "auth.login_failed", summary: `Failed sign-in for unknown email ${email}`, actorUserId: null });
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) {
+      await audit(req, {
+        action: "auth.login_failed",
+        entityId: user.id,
+        summary: `Failed sign-in for ${user.email} (wrong password)`,
+        actorUserId: user.id,
+        hotelId: user.hotelId,
+        departmentId: user.departmentId,
+      });
       return res.status(401).json({ error: "Invalid email or password" });
     }
+
+    await audit(req, {
+      action: "auth.login",
+      entityId: user.id,
+      summary: `${user.name} signed in`,
+      actorUserId: user.id,
+      hotelId: user.hotelId,
+      departmentId: user.departmentId,
+    });
 
     const token = signToken({
       userId: user.id,
@@ -80,6 +99,13 @@ authRouter.post(
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+    await audit(req, {
+      action: "auth.password_changed",
+      entityId: user.id,
+      summary: `${user.name} changed their password`,
+      hotelId: user.hotelId,
+      departmentId: user.departmentId,
+    });
 
     res.json({ ok: true });
   })

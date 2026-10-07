@@ -98,7 +98,10 @@ export const api = {
     const headers: Record<string, string> = {};
     if (authToken) headers.Authorization = `Bearer ${authToken}`;
     const res = await fetch(`${API_URL}${path}`, { headers });
-    if (!res.ok) throw new ApiError(res.status, res.statusText);
+    if (!res.ok) {
+      const body = await res.json().catch(() => undefined);
+      throw new ApiError(res.status, extractErrorMessage(body, res.statusText));
+    }
 
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);

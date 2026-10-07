@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
+import { audit, created, diff, recordRef } from "../lib/audit";
 import { requireAuth, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const workOrdersRouter = Router();
@@ -68,6 +69,14 @@ workOrdersRouter.post(
     const workOrder = await prisma.workOrder.create({
       data: { ...parsed.data, createdByUserId: req.user!.userId },
     });
+    await audit(req, {
+      action: "work_order.created",
+      entityId: workOrder.id,
+      summary: `Opened work order ${recordRef("WO", workOrder.id)} "${workOrder.title}"`,
+      changes: await created(workOrder, ["title", "description", "assignedToUserId"]),
+      hotelId: workOrder.hotelId,
+      departmentId: workOrder.departmentId,
+    });
     res.status(201).json(workOrder);
   })
 );
@@ -98,6 +107,22 @@ workOrdersRouter.patch(
     if (parsed.data.status === "COMPLETED") data.completedAt = new Date();
 
     const workOrder = await prisma.workOrder.update({ where: { id: req.params.id }, data });
+    const changes = await diff(existing, workOrder, ["title", "description", "status", "assignedToUserId"]);
+    if (Object.keys(changes).length > 0) {
+      const label = `${recordRef("WO", workOrder.id)} "${workOrder.title}"`;
+      await audit(req, {
+        action: "work_order.updated",
+        entityId: workOrder.id,
+        summary: changes.status
+          ? `Moved work order ${label} from ${existing.status} to ${workOrder.status}`
+          : changes.assignedToUserId
+          ? `Reassigned work order ${label}`
+          : `Updated work order ${label}`,
+        changes,
+        hotelId: workOrder.hotelId,
+        departmentId: workOrder.departmentId,
+      });
+    }
     res.json(workOrder);
   })
 );

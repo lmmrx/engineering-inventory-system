@@ -100,6 +100,51 @@ export interface PurchaseRequest {
   hotel?: Hotel;
 }
 
+export interface StockHealth {
+  out: number;
+  low: number;
+  healthy: number;
+  over: number;
+}
+
+export interface RunningOutItem {
+  id: string;
+  name: string;
+  unit: string;
+  hotelCode: string;
+  quantityOnHand: number;
+  reorderPoint: number;
+  dailyUsage: number;
+  daysOfCover: number;
+}
+
+export interface DashboardSummary {
+  usageWindowDays: number;
+  itemCount: number;
+  stockValue: { total: number; itemsWithCost: number };
+  health: StockHealth;
+  openWorkOrders: { total: number; stale: number; staleAfterDays: number };
+  pendingPurchaseRequests: number;
+  runningOut: RunningOutItem[];
+}
+
+export interface AuditLogEntry {
+  id: string;
+  createdAt: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  summary: string;
+  changes: Record<string, { from: unknown; to: unknown }> | null;
+  ip: string | null;
+  actor: { id: string; name: string; email: string } | null;
+}
+
+export interface AuditLogPage {
+  entries: AuditLogEntry[];
+  nextCursor: string | null;
+}
+
 export interface AppUser {
   id: string;
   name: string;
