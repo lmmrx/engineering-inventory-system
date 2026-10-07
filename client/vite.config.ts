@@ -7,6 +7,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // Registered from main.tsx instead, so the page can reload itself as
+      // soon as a new deploy's service worker takes over.
+      injectRegister: false,
+      // The plugin only enables these itself when it injects the registration,
+      // so with injectRegister off they must be set explicitly — otherwise a new
+      // deploy's worker waits until every tab is closed instead of taking over.
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+      },
       // Only precache the app shell (JS/CSS/HTML/icons). API calls go to a
       // different origin (Render) and are deliberately left uncached here —
       // stock counts and alerts must always come from the network, never a
