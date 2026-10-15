@@ -64,7 +64,7 @@ The seed script creates:
 - All 4 departments — Engineering, Housekeeping, Guest Services, Food & Beverage —
   each with a starter set of categories
 - One Admin login, printed to the console when the seed finishes
-  (default: `admin@example.com` / `ChangeMe123!` — change this password after first login)
+  (default: `admin@example.com` / `ChangeMe123!` — you'll be asked to choose a new password at first sign-in)
 
 ### 5. Run the app
 
@@ -143,12 +143,33 @@ Do these in order — each step needs a value produced by the one before it.
 4. Add an environment variable: `VITE_API_URL` = the Render URL from step 2.
 5. Deploy. Copy the URL Vercel gives you (something like
    `https://engineering-inventory.vercel.app`).
+6. `client/vercel.json` sets a Content-Security-Policy whose `connect-src`
+   names the API's origin. If your Render URL differs from the one there,
+   update it — otherwise the browser will block every API call.
 
 ### 4. Close the loop
 
 Go back to Render → your service → Environment, and set `CLIENT_ORIGIN` to the
 Vercel URL from step 3 (no trailing slash). Save — Render redeploys
 automatically. Now the API only accepts requests from your live frontend.
+
+### Locked out of an Admin account
+
+A user is locked for 15 minutes after 5 wrong passwords. An Admin can lift a
+lock early from **Settings → Users → Unlock**, and can disable/re-enable or
+reset any account there. If no Admin can sign in (forgotten password, lockout,
+or the account was disabled), recover it from a terminal pointed at the
+production database — the same way as seeding above (set `DATABASE_URL` in
+`server/.env` to the Neon connection string temporarily):
+
+```bash
+npm run admin:recover --workspace server -- admin@example.com
+```
+
+It re-enables the account, lifts the lockout, signs out all its sessions and
+prints a one-time password that must be changed at the next sign-in. The
+recovery is recorded in the audit log. Put your local `DATABASE_URL` back
+afterwards.
 
 ### If you outgrow the free tier
 

@@ -8,6 +8,7 @@ import { Spinner } from "./components/Spinner";
 import { useTakingLong } from "./hooks/useTakingLong";
 import zsHoldingsLogo from "./assets/logo-zsholdings.png";
 import { Login } from "./pages/Login";
+import { ForcePasswordChange } from "./pages/ForcePasswordChange";
 import { Dashboard } from "./pages/Dashboard";
 import { Inventory } from "./pages/Inventory";
 import { PurchaseRequests } from "./pages/PurchaseRequests";
@@ -172,6 +173,10 @@ export function App() {
         <Route path="*" element={<Login />} />
       </Routes>
     );
+  }
+
+  if (user.mustChangePassword) {
+    return <ForcePasswordChange />;
   }
 
   return <ProtectedApp />;

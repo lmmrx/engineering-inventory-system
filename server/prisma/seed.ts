@@ -102,6 +102,8 @@ async function main() {
       passwordHash,
       role: "ADMIN",
       departmentId: engineering.id,
+      // A published default password — must be replaced at first sign-in.
+      mustChangePassword: true,
     },
   });
 
@@ -139,7 +141,7 @@ async function main() {
 
   console.log("Seed complete.");
   console.log(`Admin login -> email: ${ADMIN_EMAIL}  password: ${ADMIN_PASSWORD}`);
-  console.log("Change this password after first login.");
+  console.log("You will be asked to choose a new password at first sign-in.");
 }
 
 main()

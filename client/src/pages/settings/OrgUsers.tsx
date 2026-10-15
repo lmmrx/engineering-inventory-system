@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { useAuth } from "../../context/AuthContext";
 import { useDepartmentScope } from "../../context/DepartmentScopeContext";
-import { AppUser, Department, Hotel, Role } from "../../types";
+import { AppUser, Department, Hotel, MIN_PASSWORD_LENGTH, Role } from "../../types";
 import { Field, Modal, ModalActions } from "../../components/Modal";
 import { PasswordInput } from "../../components/PasswordInput";
 
@@ -14,6 +14,14 @@ export function OrgUsers() {
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
 
   const usersQuery = useQuery({ queryKey: ["users"], queryFn: () => api.get<AppUser[]>("/users") });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const accountAction = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "disable" | "enable" | "unlock" }) =>
+      api.post<AppUser>(`/users/${id}/${action}`),
+    onMutate: () => setActionError(null),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+    onError: (err) => setActionError(err instanceof Error ? err.message : "Could not update the account."),
+  });
   const hotelsQuery = useQuery({ queryKey: ["hotels"], queryFn: () => api.get<Hotel[]>("/hotels") });
   const departmentsQuery = useQuery({ queryKey: ["departments"], queryFn: () => api.get<Department[]>("/departments") });
 
@@ -61,6 +69,7 @@ export function OrgUsers() {
               <th className="px-4 py-2">Email</th>
               <th className="px-4 py-2">Role</th>
               <th className="px-4 py-2">Hotel</th>
+              <th className="px-4 py-2">Status</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -71,18 +80,47 @@ export function OrgUsers() {
                 <td className="px-4 py-2 text-ink-500">{u.email}</td>
                 <td className="px-4 py-2 text-ink-500">{u.role}</td>
                 <td className="px-4 py-2 text-ink-500 font-mono">{hotelCode(u.hotelId)}</td>
-                <td className="px-4 py-2 text-right">
-                  {canEdit(u) && (
-                    <button onClick={() => setEditingUser(u)} className="btn-ghost text-xs px-2.5 py-1.5">
-                      Edit
-                    </button>
-                  )}
+                <td className="px-4 py-2">
+                  <AccountStatus user={u} />
+                </td>
+                <td className="px-4 py-2">
+                  <div className="flex justify-end gap-2">
+                    {/* Lifting a lockout early is Admin-only: a lock usually means someone was guessing the password. */}
+                    {isAdmin && isLocked(u) && (
+                      <button
+                        onClick={() => accountAction.mutate({ id: u.id, action: "unlock" })}
+                        disabled={accountAction.isPending}
+                        className="btn-ghost text-xs px-2.5 py-1.5"
+                      >
+                        Unlock
+                      </button>
+                    )}
+                    {canEdit(u) && u.id !== currentUser.id && (
+                      <button
+                        onClick={() => {
+                          if (u.disabledAt || window.confirm(`Disable ${u.name}? They'll be signed out and can't sign in until re-enabled.`)) {
+                            accountAction.mutate({ id: u.id, action: u.disabledAt ? "enable" : "disable" });
+                          }
+                        }}
+                        disabled={accountAction.isPending}
+                        className="btn-ghost text-xs px-2.5 py-1.5"
+                      >
+                        {u.disabledAt ? "Enable" : "Disable"}
+                      </button>
+                    )}
+                    {canEdit(u) && (
+                      <button onClick={() => setEditingUser(u)} className="btn-ghost text-xs px-2.5 py-1.5">
+                        Edit
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {actionError && <p className="text-sm text-rose-400 mt-3">{actionError}</p>}
 
       {showCreate && (
         <CreateUserModal
@@ -184,7 +222,8 @@ function CreateUserModal({
         <Field label="Temporary password">
           <PasswordInput
             required
-            minLength={8}
+            minLength={MIN_PASSWORD_LENGTH}
+            placeholder={`At least ${MIN_PASSWORD_LENGTH} characters — they'll change it at first sign-in`}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="input-field"
@@ -346,8 +385,8 @@ function EditUserModal({
 
         <Field label="Reset password (optional)">
           <PasswordInput
-            minLength={8}
-            placeholder="Leave blank to keep current password"
+            minLength={MIN_PASSWORD_LENGTH}
+            placeholder="Leave blank to keep — they'll change a reset one at sign-in"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             className="input-field"
@@ -359,4 +398,18 @@ function EditUserModal({
       </form>
     </Modal>
   );
+}
+
+function isLocked(u: AppUser) {
+  return !!u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now();
+}
+
+function AccountStatus({ user }: { user: AppUser }) {
+  if (user.disabledAt) return <span className="text-xs text-ink-500">Disabled</span>;
+  if (isLocked(user)) {
+    const until = new Date(user.lockedUntil!).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return <span className="text-xs text-rose-400">Locked until {until}</span>;
+  }
+  if (user.mustChangePassword) return <span className="text-xs text-amber-400">Must change password</span>;
+  return <span className="text-xs text-emerald-400">Active</span>;
 }

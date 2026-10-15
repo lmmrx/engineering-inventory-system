@@ -50,6 +50,12 @@ itemsRouter.get(
   })
 );
 
+/** An item's category must belong to the item's own department. */
+async function categoryMismatch(categoryId: string, departmentId: string) {
+  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  return !category || category.departmentId !== departmentId;
+}
+
 const upsertSchema = z.object({
   name: z.string().min(1),
   sku: z.string().optional(),
@@ -78,6 +84,10 @@ itemsRouter.post(
       if (parsed.data.departmentId !== req.user!.departmentId) {
         return res.status(403).json({ error: "Managers may only add items to their own department" });
       }
+    }
+
+    if (await categoryMismatch(parsed.data.categoryId, parsed.data.departmentId)) {
+      return res.status(400).json({ error: "That category belongs to a different department" });
     }
 
     if (parsed.data.sku) {
@@ -113,7 +123,9 @@ itemsRouter.patch(
     if (!existing) return res.status(404).json({ error: "Item not found" });
 
     if (req.user!.role === "MANAGER") {
-      if (existing.hotelId !== req.user!.hotelId) {
+      // A Manager runs one (hotel, department) pair — both must match, or a
+      // Housekeeping Manager could edit Engineering's items at the same hotel.
+      if (existing.hotelId !== req.user!.hotelId || existing.departmentId !== req.user!.departmentId) {
         return res.status(403).json({ error: "Forbidden" });
       }
       // Prevent a Manager from re-homing an item to a hotel or department they don't run.
@@ -123,6 +135,16 @@ itemsRouter.patch(
       if (parsed.data.departmentId && parsed.data.departmentId !== req.user!.departmentId) {
         return res.status(403).json({ error: "Managers may not move items to another department" });
       }
+    }
+
+    if (
+      (parsed.data.categoryId || parsed.data.departmentId) &&
+      (await categoryMismatch(
+        parsed.data.categoryId ?? existing.categoryId,
+        parsed.data.departmentId ?? existing.departmentId
+      ))
+    ) {
+      return res.status(400).json({ error: "That category belongs to a different department" });
     }
 
     if (parsed.data.sku) {

@@ -66,6 +66,20 @@ model User {
   role         Role     @default(STAFF)
   createdAt    DateTime @default(now())
 
+  // Set when an Admin/Manager disables the account; a disabled user can't
+  // sign in and any token they already hold stops working immediately.
+  disabledAt         DateTime?
+  // Embedded in every token; bumping it (on a password change or reset)
+  // invalidates all of the user's existing sessions.
+  tokenVersion       Int       @default(0)
+  // Forces a password change before anything else — set for temporary
+  // passwords (new users, resets) and when someone signs in with a known-weak one.
+  mustChangePassword Boolean   @default(false)
+  // Consecutive wrong passwords; reaching the limit sets lockedUntil. Only an
+  // Admin (or the server-console recovery script) can lift a lock early.
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+
   hotelId String?
   hotel   Hotel?  @relation(fields: [hotelId], references: [id])
 

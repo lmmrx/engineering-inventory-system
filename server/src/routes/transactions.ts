@@ -59,14 +59,14 @@ transactionsRouter.post(
 
   if (workOrderId) {
     const workOrder = await prisma.workOrder.findUnique({ where: { id: workOrderId } });
-    if (!workOrder || workOrder.hotelId !== item.hotelId) {
-      return res.status(400).json({ error: "Work order does not belong to this item's hotel" });
+    if (!workOrder || workOrder.hotelId !== item.hotelId || workOrder.departmentId !== item.departmentId) {
+      return res.status(400).json({ error: "Work order does not belong to this item's hotel and department" });
     }
   }
   if (purchaseRequestId) {
     const purchaseRequest = await prisma.purchaseRequest.findUnique({ where: { id: purchaseRequestId } });
-    if (!purchaseRequest || purchaseRequest.hotelId !== item.hotelId) {
-      return res.status(400).json({ error: "Purchase request does not belong to this item's hotel" });
+    if (!purchaseRequest || purchaseRequest.hotelId !== item.hotelId || purchaseRequest.departmentId !== item.departmentId) {
+      return res.status(400).json({ error: "Purchase request does not belong to this item's hotel and department" });
     }
   }
 

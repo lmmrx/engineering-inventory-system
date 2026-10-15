@@ -46,6 +46,14 @@ workOrdersRouter.get(
   })
 );
 
+/** The assignee must be an active user who works in the work order's hotel and department, or an Admin. */
+async function invalidAssignee(userId: string | null | undefined, hotelId: string, departmentId: string) {
+  if (!userId) return false;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || user.disabledAt) return true;
+  return user.role !== "ADMIN" && (user.hotelId !== hotelId || user.departmentId !== departmentId);
+}
+
 const createSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
@@ -65,6 +73,10 @@ workOrdersRouter.post(
 
     const departmentId = resolveDepartmentScope(req);
     if (departmentId && parsed.data.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
+
+    if (await invalidAssignee(parsed.data.assignedToUserId, parsed.data.hotelId, parsed.data.departmentId)) {
+      return res.status(400).json({ error: "The assignee must be an active user in this hotel and department" });
+    }
 
     const workOrder = await prisma.workOrder.create({
       data: { ...parsed.data, createdByUserId: req.user!.userId },
@@ -102,6 +114,10 @@ workOrdersRouter.patch(
 
     const departmentId = resolveDepartmentScope(req);
     if (departmentId && existing.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
+
+    if (await invalidAssignee(parsed.data.assignedToUserId, existing.hotelId, existing.departmentId)) {
+      return res.status(400).json({ error: "The assignee must be an active user in this hotel and department" });
+    }
 
     const data = { ...parsed.data } as Record<string, unknown>;
     if (parsed.data.status === "COMPLETED") data.completedAt = new Date();

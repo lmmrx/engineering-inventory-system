@@ -42,6 +42,19 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
+  // The server ends sessions on its side (account disabled, password changed
+  // elsewhere) and gates everything behind a pending password change. Either
+  // way the app's state is stale: drop it and start over from /me. The two
+  // auth calls answer 401 for a wrong password, which isn't a session problem.
+  const isCredentialCheck = path === "/auth/login" || path === "/auth/change-password";
+  if (authToken && res.status === 401 && !isCredentialCheck) {
+    setAuthToken(null);
+    window.location.assign("/");
+  } else if (res.status === 403) {
+    const body = await res.clone().json().catch(() => undefined);
+    if (body?.code === "PASSWORD_CHANGE_REQUIRED") window.location.assign("/");
+  }
+
   if (!res.ok) {
     let message = res.statusText;
     try {

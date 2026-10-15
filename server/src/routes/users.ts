@@ -1,14 +1,29 @@
-import { Router } from "express";
+import { Request, Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { User } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { audit, created, diff } from "../lib/audit";
+import { passwordSchema } from "../lib/password";
 import { requireAuth, requireRole } from "../middleware/auth";
 
 export const usersRouter = Router();
 
 usersRouter.use(requireAuth, requireRole("ADMIN", "MANAGER"));
+
+const publicSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  hotelId: true,
+  departmentId: true,
+  createdAt: true,
+  disabledAt: true,
+  lockedUntil: true,
+  mustChangePassword: true,
+} as const;
 
 usersRouter.get(
   "/",
@@ -20,19 +35,7 @@ usersRouter.get(
       req.user!.role === "MANAGER"
         ? { hotelId: req.user!.hotelId ?? undefined, departmentId: req.user!.departmentId ?? undefined }
         : {};
-    const users = await prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        hotelId: true,
-        departmentId: true,
-        createdAt: true,
-      },
-      orderBy: { name: "asc" },
-    });
+    const users = await prisma.user.findMany({ where, select: publicSelect, orderBy: { name: "asc" } });
     res.json(users);
   })
 );
@@ -40,7 +43,7 @@ usersRouter.get(
 const createSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  password: z.string().min(8),
+  password: passwordSchema,
   role: z.enum(["ADMIN", "MANAGER", "STAFF"]),
   hotelId: z.string().nullable().optional(),
   departmentId: z.string().nullable().optional(),
@@ -77,8 +80,10 @@ usersRouter.post(
         role: data.role,
         hotelId: data.hotelId ?? null,
         departmentId: data.departmentId ?? null,
+        // The creator knows this password, so it's only good for the first sign-in.
+        mustChangePassword: true,
       },
-      select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true },
+      select: publicSelect,
     });
     await audit(req, {
       action: "user.created",
@@ -92,12 +97,36 @@ usersRouter.post(
   })
 );
 
+/**
+ * Loads the target user and checks the caller may manage them. A Manager is
+ * the admin for their own (hotel, department) pair only — they may only touch
+ * Staff already inside that pair.
+ */
+async function loadManageable(req: Request): Promise<{ user: User } | { status: number; error: string }> {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) return { status: 404, error: "User not found" };
+  if (
+    req.user!.role === "MANAGER" &&
+    (user.role !== "STAFF" || user.hotelId !== req.user!.hotelId || user.departmentId !== req.user!.departmentId)
+  ) {
+    return { status: 403, error: "Forbidden" };
+  }
+  return { user };
+}
+
+/** Whether removing this user's admin access would leave no active Admin to manage the system. */
+async function isLastActiveAdmin(user: User) {
+  if (user.role !== "ADMIN" || user.disabledAt) return false;
+  const activeAdmins = await prisma.user.count({ where: { role: "ADMIN", disabledAt: null } });
+  return activeAdmins <= 1;
+}
+
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   role: z.enum(["ADMIN", "MANAGER", "STAFF"]).optional(),
   hotelId: z.string().nullable().optional(),
   departmentId: z.string().nullable().optional(),
-  password: z.string().min(8).optional(),
+  password: passwordSchema.optional(),
 });
 
 usersRouter.patch(
@@ -106,16 +135,12 @@ usersRouter.patch(
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
-    if (!existing) return res.status(404).json({ error: "User not found" });
+    const loaded = await loadManageable(req);
+    if ("error" in loaded) return res.status(loaded.status).json({ error: loaded.error });
+    const existing = loaded.user;
 
     if (req.user!.role === "MANAGER") {
-      // A Manager is the admin for their own (hotel, department) pair only —
-      // they may only touch Staff already inside that pair, may not move
-      // anyone out of it, and may not hand out Manager/Admin privileges.
-      if (existing.role !== "STAFF" || existing.hotelId !== req.user!.hotelId || existing.departmentId !== req.user!.departmentId) {
-        return res.status(403).json({ error: "Forbidden" });
-      }
+      // ...and may not move anyone out of that pair or hand out Manager/Admin privileges.
       if (parsed.data.role && parsed.data.role !== "STAFF") {
         return res.status(403).json({ error: "Managers may not change a user's role to Manager or Admin" });
       }
@@ -127,15 +152,21 @@ usersRouter.patch(
       }
     }
 
+    if (parsed.data.role && parsed.data.role !== "ADMIN" && (await isLastActiveAdmin(existing))) {
+      return res.status(400).json({ error: "This is the only active Admin — make someone else an Admin first" });
+    }
+
     const { password, ...rest } = parsed.data;
     const data: Record<string, unknown> = { ...rest };
-    if (password) data.passwordHash = await bcrypt.hash(password, 10);
+    if (password) {
+      // The resetter knows the new password, so the user must replace it, and
+      // any session that knew the old one is signed out.
+      data.passwordHash = await bcrypt.hash(password, 10);
+      data.mustChangePassword = true;
+      data.tokenVersion = { increment: 1 };
+    }
 
-    const user = await prisma.user.update({
-      where: { id: req.params.id },
-      data,
-      select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true },
-    });
+    const user = await prisma.user.update({ where: { id: existing.id }, data, select: publicSelect });
 
     const changes = await diff(existing, user, ["name", "role", "hotelId", "departmentId"]);
     // Never log the password itself — only that it was reset.
@@ -154,6 +185,87 @@ usersRouter.patch(
         departmentId: user.departmentId,
       });
     }
+    res.json(user);
+  })
+);
+
+usersRouter.post(
+  "/:id/disable",
+  asyncHandler(async (req, res) => {
+    const loaded = await loadManageable(req);
+    if ("error" in loaded) return res.status(loaded.status).json({ error: loaded.error });
+    const existing = loaded.user;
+
+    if (existing.id === req.user!.userId) {
+      return res.status(400).json({ error: "You can't disable your own account" });
+    }
+    if (await isLastActiveAdmin(existing)) {
+      return res.status(400).json({ error: "This is the only active Admin — make someone else an Admin first" });
+    }
+    if (existing.disabledAt) return res.json(await prisma.user.findUnique({ where: { id: existing.id }, select: publicSelect }));
+
+    // requireAuth rejects disabled users, so this ends their current sessions too.
+    const user = await prisma.user.update({
+      where: { id: existing.id },
+      data: { disabledAt: new Date() },
+      select: publicSelect,
+    });
+    await audit(req, {
+      action: "user.disabled",
+      entityId: user.id,
+      summary: `Disabled ${user.name} (${user.email}); their sessions were signed out`,
+      hotelId: user.hotelId,
+      departmentId: user.departmentId,
+    });
+    res.json(user);
+  })
+);
+
+usersRouter.post(
+  "/:id/enable",
+  asyncHandler(async (req, res) => {
+    const loaded = await loadManageable(req);
+    if ("error" in loaded) return res.status(loaded.status).json({ error: loaded.error });
+    const existing = loaded.user;
+    if (!existing.disabledAt) return res.json(await prisma.user.findUnique({ where: { id: existing.id }, select: publicSelect }));
+
+    const user = await prisma.user.update({
+      where: { id: existing.id },
+      data: { disabledAt: null, failedLoginCount: 0, lockedUntil: null },
+      select: publicSelect,
+    });
+    await audit(req, {
+      action: "user.enabled",
+      entityId: user.id,
+      summary: `Re-enabled ${user.name} (${user.email})`,
+      hotelId: user.hotelId,
+      departmentId: user.departmentId,
+    });
+    res.json(user);
+  })
+);
+
+// Lifting a sign-in lockout early is reserved for Admins: a lock usually means
+// someone has been guessing the password, so it shouldn't be routine to clear.
+usersRouter.post(
+  "/:id/unlock",
+  requireRole("ADMIN"),
+  asyncHandler(async (req, res) => {
+    const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: "User not found" });
+
+    const user = await prisma.user.update({
+      where: { id: existing.id },
+      data: { failedLoginCount: 0, lockedUntil: null },
+      select: publicSelect,
+    });
+    await audit(req, {
+      action: "user.unlocked",
+      entityId: user.id,
+      summary: `Unlocked sign-in for ${user.name} (${user.email})`,
+      hotelId: user.hotelId,
+      departmentId: user.departmentId,
+    });
     res.json(user);
   })
 );

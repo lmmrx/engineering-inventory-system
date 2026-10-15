@@ -7,7 +7,11 @@ export interface CurrentUser {
   role: Role;
   hotelId: string | null;
   departmentId: string | null;
+  mustChangePassword?: boolean;
 }
+
+/** Kept in step with the server's password policy (server/src/lib/password.ts). */
+export const MIN_PASSWORD_LENGTH = 10;
 
 export interface Hotel {
   id: string;
@@ -153,4 +157,7 @@ export interface AppUser {
   hotelId: string | null;
   departmentId: string | null;
   createdAt?: string;
+  disabledAt?: string | null;
+  lockedUntil?: string | null;
+  mustChangePassword?: boolean;
 }

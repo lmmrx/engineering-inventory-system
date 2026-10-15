@@ -1,4 +1,5 @@
 import cors from "cors";
+import helmet from "helmet";
 import express, { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { auditLogsRouter } from "./routes/auditLogs";
@@ -42,7 +43,10 @@ export function createApp() {
       },
     })
   );
-  app.use(express.json());
+  // Standard security headers (nosniff, no framing, HSTS, a deny-all CSP —
+  // the API only ever serves JSON).
+  app.use(helmet());
+  app.use(express.json({ limit: "100kb" }));
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
@@ -83,7 +87,7 @@ export function createApp() {
     asyncHandler(async (req, res) => {
       const user = await prisma.user.findUnique({
         where: { id: req.user!.userId },
-        select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true },
+        select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true, mustChangePassword: true },
       });
       res.json(user);
     })
@@ -102,7 +106,7 @@ export function createApp() {
       const user = await prisma.user.update({
         where: { id: req.user!.userId },
         data: { name: parsed.data.name },
-        select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true },
+        select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true, mustChangePassword: true },
       });
       if (before && before.name !== user.name) {
         await audit(req, {
