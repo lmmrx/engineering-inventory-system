@@ -29,7 +29,8 @@
     @apply bg-navy-900 border border-navy-800 rounded-md;
   }
   .table-shell {
-    @apply bg-navy-900 border border-navy-800 rounded-md overflow-hidden;
+    /* Scrolls sideways on phones instead of cutting off columns. */
+    @apply bg-navy-900 border border-navy-800 rounded-md overflow-x-auto;
   }
   .table-head-row {
     @apply bg-navy-900 text-ink-500 text-left text-xs uppercase tracking-wide border-b border-navy-800;
@@ -50,6 +51,7 @@
     @apply fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50;
   }
   .modal-panel {
-    @apply card shadow-2xl shadow-black/50 w-full p-6;
+    /* Tall forms scroll inside the panel, so Save stays reachable on a phone. */
+    @apply card shadow-2xl shadow-black/50 w-full p-6 max-h-full overflow-y-auto;
   }
 }

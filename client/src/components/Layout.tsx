@@ -11,7 +11,8 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 export function Layout() {
   return (
     <div className="min-h-screen bg-navy-950 flex flex-col">
-      <header className="sticky top-0 z-10 bg-navy-950/95 backdrop-blur border-b border-navy-800">
+      {/* The top padding keeps the header clear of the iPhone notch when installed to the home screen. */}
+      <header className="sticky top-0 z-10 bg-navy-950/95 backdrop-blur border-b border-navy-800 pt-[env(safe-area-inset-top)]">
         <div className="mx-auto max-w-[1600px] px-4 py-3 flex items-center gap-2">
           <div className="flex items-center gap-2 flex-none pr-6">
             <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-7 w-auto flex-none" />
