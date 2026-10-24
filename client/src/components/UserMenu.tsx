@@ -20,6 +20,14 @@ function ChevronLeft() {
   );
 }
 
+function ChevronUpDown() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="flex-none text-ink-500">
+      <path d="M6.5 8 10 4.5 13.5 8M6.5 12 10 15.5 13.5 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function CheckIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="flex-none">
@@ -33,7 +41,18 @@ const menuItemClass =
 
 type Panel = "main" | "property" | "department";
 
-export function UserMenu() {
+/**
+ * The account menu. In the sidebar it shows your name and current property
+ * and opens upward; in the phone top bar it's just the avatar.
+ */
+export function UserMenu({
+  placement = "sidebar",
+  compact = false,
+}: {
+  placement?: "sidebar" | "topbar";
+  /** In a collapsed sidebar: just the avatar. */
+  compact?: boolean;
+}) {
   const { user, logout } = useAuth();
   const { hotels, selectedHotelId, setSelectedHotelId, canSwitchHotels } = useHotelScope();
   const { departments, selectedDepartmentId, setSelectedDepartmentId, canSwitchDepartments } = useDepartmentScope();
@@ -60,11 +79,6 @@ export function UserMenu() {
   const currentHotelCode =
     selectedHotelId === ALL_HOTELS ? "All Hotels" : hotels.find((h) => h.id === selectedHotelId)?.code ?? "—";
   const currentDepartmentName = departments.find((d) => d.id === selectedDepartmentId)?.name ?? "—";
-  // Size the header label to the worst-case combination so it never truncates
-  // and doesn't shift width as the selection changes.
-  const longestHotelCode = Math.max("All Hotels".length, ...hotels.map((h) => h.code.length));
-  const longestDepartmentName = Math.max(0, ...departments.map((d) => d.name.length));
-  const headerLabelWidth = longestHotelCode + 3 + longestDepartmentName;
 
   function closeMenu() {
     setOpen(false);
@@ -77,26 +91,43 @@ export function UserMenu() {
   }
 
   return (
-    <div className="relative flex-none flex items-center gap-1.5" ref={containerRef}>
-      <span
-        className="hidden md:inline text-sm text-ink-200 whitespace-nowrap"
-        style={{ minWidth: `${headerLabelWidth}ch` }}
-      >
-        <span>{currentDepartmentName}</span>
-        <span className="text-ink-600"> · </span>
-        <span className="font-mono">{currentHotelCode}</span>
-      </span>
-
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="h-8 w-8 rounded-full bg-gold-500 text-white text-sm font-semibold flex items-center justify-center hover:bg-gold-600 transition flex-none"
-        aria-label="Account menu"
-      >
-        {initial}
-      </button>
+    <div className={placement === "sidebar" ? "relative" : "relative flex-none"} ref={containerRef}>
+      {placement === "sidebar" && !compact ? (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="w-full flex items-center gap-2.5 rounded-md px-2 py-2 text-left hover:bg-navy-800 transition"
+          aria-label="Account menu"
+          aria-expanded={open}
+        >
+          <span className="h-8 w-8 rounded-full bg-gold-500 text-white text-sm font-semibold flex items-center justify-center flex-none">
+            {initial}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm text-ink-100 truncate">{user.name}</span>
+            <span className="block text-xs text-ink-500 truncate">
+              {currentDepartmentName} · <span className="font-mono">{currentHotelCode}</span>
+            </span>
+          </span>
+          <ChevronUpDown />
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="h-8 w-8 rounded-full bg-gold-500 text-white text-sm font-semibold flex items-center justify-center hover:bg-gold-600 transition flex-none"
+          aria-label="Account menu"
+          aria-expanded={open}
+          title={compact ? `${user.name} · ${currentDepartmentName} · ${currentHotelCode}` : undefined}
+        >
+          {initial}
+        </button>
+      )}
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-72 card shadow-2xl shadow-black/50 py-1.5 z-20">
+        <div
+          className={`absolute ${
+            placement === "sidebar" ? "left-0 bottom-full mb-2" : "right-0 top-full mt-2"
+          } w-72 max-w-[calc(100vw-2rem)] card shadow-2xl shadow-black/50 py-1.5 z-30`}
+        >
           <div className="px-3 py-2 border-b border-navy-800 mb-1">
             <p className="text-sm font-medium text-ink-100 truncate">{user.name}</p>
             <p className="text-xs text-ink-500 truncate">{user.email}</p>
