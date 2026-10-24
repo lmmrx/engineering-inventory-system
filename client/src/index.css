@@ -2,15 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme colors as "r g b" triples (see tailwind.config.js). Dark is the
+   default; the user's Appearance setting puts data-theme="light" on <html>. */
+:root {
+  color-scheme: dark;
+  --navy-950: 13 17 23;
+  --navy-900: 22 27 34;
+  --navy-850: 28 33 40;
+  --navy-800: 48 54 61;
+  --navy-700: 61 68 77;
+  --navy-600: 68 76 86;
+  --gold-300: 121 192 255;
+  --gold-400: 88 166 255;
+  --gold-500: 31 111 235;
+  --gold-600: 17 88 199;
+  --ink-100: 230 237 243;
+  --ink-200: 201 209 217;
+  --ink-300: 139 148 158;
+  --ink-500: 110 118 129;
+  --ink-600: 87 96 106;
+  --font-scale: 1;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --navy-950: 255 255 255;
+  --navy-900: 246 248 250;
+  --navy-850: 238 241 244;
+  --navy-800: 208 215 222;
+  --navy-700: 182 191 200;
+  --navy-600: 154 164 174;
+  --gold-300: 5 80 174;
+  --gold-400: 9 105 218;
+  --gold-500: 9 105 218;
+  --gold-600: 5 80 174;
+  --ink-100: 31 35 40;
+  --ink-200: 50 56 63;
+  --ink-300: 89 99 110;
+  --ink-500: 110 119 129;
+  --ink-600: 140 149 159;
+}
+
+/* The pale red/green/amber/blue text tints are tuned for a dark background;
+   on white they'd be too faint to read, so light mode uses deeper shades. */
+:root[data-theme="light"] .text-rose-300,
+:root[data-theme="light"] .text-rose-400 { color: #cf222e; }
+:root[data-theme="light"] .text-emerald-300,
+:root[data-theme="light"] .text-emerald-400 { color: #1a7f37; }
+:root[data-theme="light"] .text-blue-300,
+:root[data-theme="light"] .text-sky-300 { color: #0969da; }
+:root[data-theme="light"] .text-amber-200,
+:root[data-theme="light"] .text-amber-300,
+:root[data-theme="light"] .text-amber-400 { color: #9a6700; }
+:root[data-theme="light"] .text-amber-200\/70 { color: rgb(154 103 0 / 0.85); }
+
 @layer base {
-  html {
-    color-scheme: dark;
-  }
   body {
     @apply bg-navy-950 text-ink-300 font-sans;
+    font-size: calc(1rem * var(--font-scale));
   }
   ::selection {
-    @apply bg-gold-500 text-ink-100;
+    @apply bg-gold-500/30;
   }
   /* Browsers paint autofilled inputs pale blue/yellow, which clashes with the
      dark inputs; an inset shadow is the only reliable way to override it. */

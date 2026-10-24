@@ -1,3 +1,5 @@
+import type { Preferences } from "./preferences";
+
 export type Role = "ADMIN" | "MANAGER" | "STAFF";
 
 export interface CurrentUser {
@@ -10,6 +12,8 @@ export interface CurrentUser {
   mustChangePassword?: boolean;
   /** When the current password expires; null when the server has expiry turned off. */
   passwordExpiresAt?: string | null;
+  /** Display settings saved on the account (see preferences.ts). */
+  preferences?: Partial<Preferences>;
 }
 
 /** Start reminding people this many days before their password expires. */

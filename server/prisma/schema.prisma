@@ -79,6 +79,9 @@ model User {
   // this (PASSWORD_MAX_AGE_DAYS). Existing accounts start counting from the
   // migration that added it.
   passwordChangedAt  DateTime  @default(now())
+  // Display settings the user picks for themselves: theme, font, zoom,
+  // language (see server/src/lib/preferences.ts).
+  preferences        Json?
   // Consecutive wrong passwords; reaching the limit sets lockedUntil. Only an
   // Admin (or the server-console recovery script) can lift a lock early.
   failedLoginCount   Int       @default(0)

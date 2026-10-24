@@ -1,5 +1,6 @@
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useT } from "../../i18n";
 import { settingsGroupsForRole } from "./settingsNav";
 
 export function SettingsIndex() {
@@ -14,24 +15,25 @@ export function SettingsLayout() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const t = useT();
   if (!user) return null;
   const groups = settingsGroupsForRole(user.role);
 
   return (
     <div>
-      <h1 className="text-lg font-semibold text-ink-100 mb-4">Settings</h1>
+      <h1 className="text-lg font-semibold text-ink-100 mb-4">{t("settings.title")}</h1>
       {/* Phones: one dropdown instead of the full list, so the page content isn't pushed far down. */}
       <select
         value={location.pathname}
         onChange={(e) => navigate(e.target.value)}
         className="input-field md:hidden mb-4"
-        aria-label="Settings page"
+        aria-label={t("settings.choosePage")}
       >
         {groups.map((group) => (
-          <optgroup key={group.label} label={group.label}>
+          <optgroup key={group.label} label={t(group.label)}>
             {group.items.map((item) => (
               <option key={item.to} value={`/settings/${item.to}`}>
-                {item.label}
+                {t(item.label)}
               </option>
             ))}
           </optgroup>
@@ -43,13 +45,15 @@ export function SettingsLayout() {
           {groups.map((group) => (
             <div key={group.label}>
               <p className="px-2.5 text-xs font-semibold uppercase tracking-wide text-ink-600 mb-1">
-                {group.label}
+                {t(group.label)}
               </p>
               <div className="space-y-0.5">
                 {group.items.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
+                    // Exact match, so "Profile" isn't also highlighted on Profile → Appearance.
+                    end
                     className={({ isActive }) =>
                       `block px-2.5 py-1.5 rounded-md text-sm transition ${
                         isActive
@@ -58,7 +62,7 @@ export function SettingsLayout() {
                       }`
                     }
                   >
-                    {item.label}
+                    {t(item.label)}
                   </NavLink>
                 ))}
               </div>

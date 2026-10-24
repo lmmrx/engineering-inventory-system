@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { StaffDashboard } from "./StaffDashboard";
+import { MessageKey, useLocale, useT } from "../i18n";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { DashboardSummary, InventoryItem, StockHealth, StockTransaction } from "../types";
@@ -17,14 +18,13 @@ const STATUS = {
   info: "#58a6ff",
 };
 
-const HEALTH_SEGMENTS: { key: keyof StockHealth; label: string; color: string }[] = [
-  { key: "out", label: "Out of stock", color: STATUS.critical },
-  { key: "low", label: "Low", color: STATUS.warning },
-  { key: "healthy", label: "Healthy", color: STATUS.good },
-  { key: "over", label: "Over max", color: STATUS.info },
+const HEALTH_SEGMENTS: { key: keyof StockHealth; label: MessageKey; color: string }[] = [
+  { key: "out", label: "health.out", color: STATUS.critical },
+  { key: "low", label: "health.low", color: STATUS.warning },
+  { key: "healthy", label: "health.healthy", color: STATUS.good },
+  { key: "over", label: "health.over", color: STATUS.info },
 ];
 
-const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
 /** Staff see their own work first; Managers and Admins see the whole operation. */
 export function Dashboard() {
@@ -33,6 +33,8 @@ export function Dashboard() {
 }
 
 function TeamDashboard() {
+  const t = useT();
+  const numberFormat = new Intl.NumberFormat(useLocale(), { maximumFractionDigits: 0 });
   const { selectedHotelId } = useHotelScope();
   const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
@@ -69,58 +71,58 @@ function TeamDashboard() {
     <div className="space-y-6">
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatTile
-          label="Stock value"
+          label={t("dash.stockValue")}
           value={summary ? numberFormat.format(summary.stockValue.total) : undefined}
           detail={
             summary &&
             (summary.itemCount === 0
-              ? "No items yet"
+              ? t("dash.noItemsYet")
               : summary.stockValue.itemsWithCost === summary.itemCount
-              ? `All ${summary.itemCount} items costed`
-              : `Cost set on ${summary.stockValue.itemsWithCost} of ${summary.itemCount} items`)
+              ? t("dash.allCosted", { count: summary.itemCount })
+              : t("dash.someCosted", { costed: summary.stockValue.itemsWithCost, count: summary.itemCount }))
           }
         />
         <StatTile
-          label="Low or out of stock"
+          label={t("dash.lowOrOut")}
           value={summary && String(summary.health.out + summary.health.low)}
-          detail={summary && `${summary.health.out} out · ${summary.health.low} low`}
+          detail={summary && t("dash.outLow", { out: summary.health.out, low: summary.health.low })}
           to="/inventory"
         />
         <StatTile
-          label="Open work orders"
+          label={t("dash.openWorkOrders")}
           value={summary && String(summary.openWorkOrders.total)}
           detail={
             summary &&
             (summary.openWorkOrders.stale > 0
-              ? `${summary.openWorkOrders.stale} open over ${summary.openWorkOrders.staleAfterDays} days`
-              : "None overdue")
+              ? t("dash.overdue", { count: summary.openWorkOrders.stale, days: summary.openWorkOrders.staleAfterDays })
+              : t("dash.noneOverdue"))
           }
           to="/work-orders"
         />
         <StatTile
-          label="Pending purchase requests"
+          label={t("dash.pendingRequests")}
           value={summary && String(summary.pendingPurchaseRequests)}
-          detail={summary && (summary.pendingPurchaseRequests > 0 ? "Awaiting approval" : "Nothing to approve")}
+          detail={summary && (summary.pendingPurchaseRequests > 0 ? t("dash.awaitingApproval") : t("dash.nothingToApprove"))}
           to="/purchase-requests"
         />
       </div>
 
       <section className="card p-4">
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-semibold text-ink-100">Stock health</h2>
-          {summary && <span className="text-xs text-ink-500">{summary.itemCount} items</span>}
+          <h2 className="font-semibold text-ink-100">{t("dash.stockHealth")}</h2>
+          {summary && <span className="text-xs text-ink-500">{t("dash.itemCount", { count: summary.itemCount })}</span>}
         </div>
         {summary && <StockHealthBar health={summary.health} total={summary.itemCount} />}
       </section>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="card p-4">
-          <h2 className="font-semibold text-ink-100">Running out soonest</h2>
+          <h2 className="font-semibold text-ink-100">{t("dash.runningOut")}</h2>
           <p className="text-xs text-ink-500 mb-3">
-            Forecast from each item's usage pattern — same as Analytics
+            {t("dash.runningOutHint")}
           </p>
           {summary?.runningOut.length === 0 && (
-            <p className="text-sm text-ink-500">No items issued in this period yet.</p>
+            <p className="text-sm text-ink-500">{t("dash.noneIssued")}</p>
           )}
           <ul className="divide-y divide-navy-800">
             {summary?.runningOut.map((item) => (
@@ -131,7 +133,7 @@ function TeamDashboard() {
                     {viewingAllHotels && <span className="text-ink-600 font-mono"> · {item.hotelCode}</span>}
                   </Link>
                   <span className="text-xs text-ink-500 font-mono">
-                    {item.quantityOnHand} {item.unit} · ~{item.dailyUsage}/day
+                    {item.quantityOnHand} {item.unit} · {t("dash.perDay", { rate: item.dailyUsage })}
                   </span>
                 </div>
                 <DaysOfCover days={item.daysOfCover} />
@@ -141,8 +143,8 @@ function TeamDashboard() {
         </section>
 
         <section className="card p-4">
-          <h2 className="font-semibold text-ink-100 mb-3">Low stock alerts</h2>
-          {lowStockQuery.data?.length === 0 && <p className="text-sm text-ink-500">Nothing below reorder point.</p>}
+          <h2 className="font-semibold text-ink-100 mb-3">{t("dash.lowAlerts")}</h2>
+          {lowStockQuery.data?.length === 0 && <p className="text-sm text-ink-500">{t("dash.nothingBelow")}</p>}
           <ul className="divide-y divide-navy-800">
             {lowStockQuery.data?.map((item) => (
               <li key={item.id} className="py-2 flex items-center justify-between text-sm">
@@ -161,12 +163,12 @@ function TeamDashboard() {
         </section>
 
         <section className="card p-4">
-          <h2 className="font-semibold text-ink-100 mb-3">Recent activity</h2>
+          <h2 className="font-semibold text-ink-100 mb-3">{t("dash.recentActivity")}</h2>
           <ul className="divide-y divide-navy-800">
             {activityQuery.data?.slice(0, 10).map((tx) => (
               <li key={tx.id} className="py-2 text-sm flex items-center justify-between">
                 <span className="text-ink-200">
-                  {tx.type} · {tx.item?.name ?? tx.itemId}
+                  {t(`tx.${tx.type}`)} · {tx.item?.name ?? tx.itemId}
                   {viewingAllHotels && tx.item?.hotel && (
                     <span className="text-ink-600 font-mono"> · {tx.item.hotel.code}</span>
                   )}
@@ -177,7 +179,7 @@ function TeamDashboard() {
                 </span>
               </li>
             ))}
-            {activityQuery.data?.length === 0 && <p className="text-sm text-ink-500">No activity yet.</p>}
+            {activityQuery.data?.length === 0 && <p className="text-sm text-ink-500">{t("dash.noActivity")}</p>}
           </ul>
         </section>
       </div>
@@ -203,16 +205,17 @@ function StatTile({ label, value, detail, to }: { label: string; value?: string;
 }
 
 function StockHealthBar({ health, total }: { health: StockHealth; total: number }) {
+  const t = useT();
   const [hovered, setHovered] = useState<keyof StockHealth | null>(null);
 
-  if (total === 0) return <p className="text-sm text-ink-500">No items yet.</p>;
+  if (total === 0) return <p className="text-sm text-ink-500">{t("dash.noItemsYet")}</p>;
 
   const segments = HEALTH_SEGMENTS.filter((s) => health[s.key] > 0);
   const percent = (n: number) => Math.round((n / total) * 100);
 
   return (
     <div>
-      <div className="flex gap-[2px]" role="img" aria-label={HEALTH_SEGMENTS.map((s) => `${s.label}: ${health[s.key]}`).join(", ")}>
+      <div className="flex gap-[2px]" role="img" aria-label={HEALTH_SEGMENTS.map((s) => `${t(s.label)}: ${health[s.key]}`).join(", ")}>
         {segments.map((s, i) => (
           // The hover target is taller than the visible bar so thin segments stay easy to hit.
           <div
@@ -235,7 +238,7 @@ function StockHealthBar({ health, total }: { health: StockHealth; total: number 
                   i === 0 ? "left-0" : i === segments.length - 1 ? "right-0" : "left-1/2 -translate-x-1/2"
                 } whitespace-nowrap rounded-md border border-navy-700 bg-navy-850 px-2 py-1 text-xs text-ink-200 shadow-lg pointer-events-none`}
               >
-                {s.label}: <span className="font-mono text-ink-100">{health[s.key]}</span> ({percent(health[s.key])}%)
+                {t(s.label)}: <span className="font-mono text-ink-100">{health[s.key]}</span> ({percent(health[s.key])}%)
               </div>
             )}
           </div>
@@ -249,7 +252,7 @@ function StockHealthBar({ health, total }: { health: StockHealth; total: number 
             className={`flex items-center gap-2 transition-opacity ${hovered && hovered !== s.key ? "opacity-50" : ""}`}
           >
             <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: s.color }} aria-hidden="true" />
-            <span className="text-ink-300">{s.label}</span>
+            <span className="text-ink-300">{t(s.label)}</span>
             <span className="font-mono text-ink-100">{health[s.key]}</span>
             <span className="text-ink-500 text-xs">{percent(health[s.key])}%</span>
           </li>
@@ -260,8 +263,10 @@ function StockHealthBar({ health, total }: { health: StockHealth; total: number 
 }
 
 function DaysOfCover({ days }: { days: number | null }) {
+  const t = useT();
   const color = days === null ? null : days <= 3 ? STATUS.critical : days <= 7 ? STATUS.warning : null;
-  const text = days === null ? "1y+" : days === 0 ? "Out" : `${days} ${days === 1 ? "day" : "days"}`;
+  const text =
+    days === null ? t("cover.overYear") : days === 0 ? t("cover.out") : days === 1 ? t("cover.day") : t("cover.days", { count: days });
   return (
     <span className="flex items-center gap-1.5 shrink-0 text-sm font-mono text-ink-100">
       {color && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />}

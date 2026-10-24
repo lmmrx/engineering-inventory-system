@@ -6,28 +6,31 @@ import { useAuth } from "../context/AuthContext";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { InventoryItem, MyWork, MyWorkOrder, WorkOrderStatus } from "../types";
+import { MessageKey, useLocale, useT } from "../i18n";
 
 // Same reserved stock-status colors as the main dashboard, always next to a text label.
-const STOCK_STATUS: Record<MyWork["topItems"][number]["status"], { label: string; color: string | null }> = {
-  out: { label: "Out", color: "#d03b3b" },
-  low: { label: "Low", color: "#fab219" },
-  healthy: { label: "OK", color: null },
-  over: { label: "Over max", color: null },
+const STOCK_STATUS: Record<MyWork["topItems"][number]["status"], { label: MessageKey; color: string | null }> = {
+  out: { label: "stock.out", color: "#d03b3b" },
+  low: { label: "stock.low", color: "#fab219" },
+  healthy: { label: "stock.ok", color: null },
+  over: { label: "stock.over", color: null },
 };
 
-const NEXT_STEP: Record<WorkOrderStatus, { status: WorkOrderStatus; label: string } | null> = {
-  OPEN: { status: "IN_PROGRESS", label: "Start" },
-  IN_PROGRESS: { status: "COMPLETED", label: "Complete" },
+const NEXT_STEP: Record<WorkOrderStatus, { status: WorkOrderStatus; label: MessageKey } | null> = {
+  OPEN: { status: "IN_PROGRESS", label: "staff.start" },
+  IN_PROGRESS: { status: "COMPLETED", label: "staff.complete" },
   COMPLETED: null,
 };
 
-const TYPE_LABEL = { RECEIVE: "Received", ISSUE: "Issued", ADJUSTMENT: "Adjusted" } as const;
-
-const shortDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+function useShortDate() {
+  return new Intl.DateTimeFormat(useLocale(), { month: "short", day: "numeric" });
+}
 
 /** What a Staff member sees first: their own jobs and the stock they handle. */
 export function StaffDashboard() {
   const { user } = useAuth();
+  const t = useT();
+  const shortDate = useShortDate();
   const { selectedHotelId } = useHotelScope();
   const { selectedDepartmentId } = useDepartmentScope();
   const queryClient = useQueryClient();
@@ -63,24 +66,24 @@ export function StaffDashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-semibold text-ink-100">Hi {user?.name.split(" ")[0]}</h1>
+      <h1 className="text-lg font-semibold text-ink-100">{t("staff.hi", { name: user?.name.split(" ")[0] ?? "" })}</h1>
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
         <Tile
-          label="My open work orders"
+          label={t("staff.myOpen")}
           value={work?.assigned.length}
-          detail={work && (work.assigned.length === 0 ? "Nothing assigned" : `${inProgress} in progress`)}
+          detail={work && (work.assigned.length === 0 ? t("staff.nothingAssigned") : t("staff.inProgressCount", { count: inProgress }))}
           href="#my-work"
         />
         <Tile
-          label="Completed this week"
+          label={t("staff.completedWeek")}
           value={work?.completedThisWeek}
-          detail={work && "Last 7 days"}
+          detail={work && t("staff.last7")}
         />
         <Tile
-          label="Low or out of stock"
+          label={t("dash.lowOrOut")}
           value={lowCount}
-          detail={lowCount === undefined ? undefined : lowCount === 0 ? "All stocked" : "Needs restocking"}
+          detail={lowCount === undefined ? undefined : lowCount === 0 ? t("staff.allStocked") : t("staff.needsRestock")}
           to="/inventory"
         />
       </div>
@@ -89,13 +92,13 @@ export function StaffDashboard() {
         <p className="text-sm text-rose-400">
           {updateMutation.error instanceof Error && updateMutation.error.message
             ? updateMutation.error.message
-            : "Could not update the work order."}
+            : t("staff.updateFailed")}
         </p>
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Section id="my-work" title="My work orders" subtitle="Assigned to you, oldest first">
-          {work?.assigned.length === 0 && <Empty>Nothing assigned to you right now.</Empty>}
+        <Section id="my-work" title={t("staff.myWork")} subtitle={t("staff.myWorkHint")}>
+          {work?.assigned.length === 0 && <Empty>{t("staff.nothingNow")}</Empty>}
           <ul className="divide-y divide-navy-800">
             {work?.assigned.map((wo) => {
               const next = NEXT_STEP[wo.status];
@@ -110,7 +113,7 @@ export function StaffDashboard() {
                         disabled={busyId === wo.id}
                         className={next.status === "COMPLETED" ? "btn-primary text-xs px-2.5 py-1.5" : "btn-ghost text-xs px-2.5 py-1.5"}
                       >
-                        {busyId === wo.id ? "Saving..." : next.label}
+                        {busyId === wo.id ? t("common.saving") : t(next.label)}
                       </button>
                     )
                   }
@@ -120,8 +123,8 @@ export function StaffDashboard() {
           </ul>
         </Section>
 
-        <Section title="Up for grabs" subtitle="Open work orders nobody has taken yet">
-          {work?.upForGrabs.length === 0 && <Empty>Every open work order has someone on it.</Empty>}
+        <Section title={t("staff.upForGrabs")} subtitle={t("staff.upForGrabsHint")}>
+          {work?.upForGrabs.length === 0 && <Empty>{t("staff.allTaken")}</Empty>}
           <ul className="divide-y divide-navy-800">
             {work?.upForGrabs.map((wo) => (
               <WorkOrderRow
@@ -134,7 +137,7 @@ export function StaffDashboard() {
                       disabled={busyId === wo.id}
                       className="btn-ghost text-xs px-2.5 py-1.5"
                     >
-                      {busyId === wo.id ? "Saving..." : "Take it"}
+                      {busyId === wo.id ? t("common.saving") : t("staff.take")}
                     </button>
                   )
                 }
@@ -143,8 +146,8 @@ export function StaffDashboard() {
           </ul>
         </Section>
 
-        <Section title="Items I use most" subtitle="What you issued in the last 30 days, and what's left">
-          {work?.topItems.length === 0 && <Empty>You haven't issued anything in the last 30 days.</Empty>}
+        <Section title={t("staff.topItems")} subtitle={t("staff.topItemsHint")}>
+          {work?.topItems.length === 0 && <Empty>{t("staff.noneIssued")}</Empty>}
           <ul className="divide-y divide-navy-800">
             {work?.topItems.map((item) => {
               const status = STOCK_STATUS[item.status];
@@ -155,7 +158,7 @@ export function StaffDashboard() {
                       {item.name}
                     </Link>
                     <span className="text-xs text-ink-500">
-                      You issued {item.issuedLast30Days} {item.unit}
+                      {t("staff.youIssued", { quantity: item.issuedLast30Days, unit: item.unit })}
                     </span>
                   </div>
                   <span className="flex items-center gap-1.5 shrink-0 font-mono text-ink-100">
@@ -163,7 +166,7 @@ export function StaffDashboard() {
                       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color }} aria-hidden="true" />
                     )}
                     {item.quantityOnHand} {item.unit}
-                    <span className="text-xs text-ink-500 font-sans">{status.label}</span>
+                    <span className="text-xs text-ink-500 font-sans">{t(status.label)}</span>
                   </span>
                 </li>
               );
@@ -171,13 +174,13 @@ export function StaffDashboard() {
           </ul>
         </Section>
 
-        <Section title="My recent activity" subtitle="Your latest stock movements">
-          {work?.recent.length === 0 && <Empty>No stock movements by you yet.</Empty>}
+        <Section title={t("staff.recent")} subtitle={t("staff.recentHint")}>
+          {work?.recent.length === 0 && <Empty>{t("staff.noMovements")}</Empty>}
           <ul className="divide-y divide-navy-800">
             {work?.recent.map((tx) => (
               <li key={tx.id} className="py-2 text-sm flex items-center justify-between gap-3">
                 <span className="text-ink-200 min-w-0 truncate">
-                  {TYPE_LABEL[tx.type]} · {tx.item.name}
+                  {t(`tx.${tx.type}`)} · {tx.item.name}
                   <span className="text-xs text-ink-500"> · {shortDate.format(new Date(tx.createdAt))}</span>
                 </span>
                 <span className={`font-mono shrink-0 ${tx.quantity < 0 ? "text-rose-400" : "text-emerald-400"}`}>
@@ -190,8 +193,8 @@ export function StaffDashboard() {
         </Section>
       </div>
 
-      <Section title="Low stock alerts" subtitle="Below reorder point — tell your manager if something's missing">
-        {lowStockQuery.data?.length === 0 && <Empty>Nothing below reorder point.</Empty>}
+      <Section title={t("dash.lowAlerts")} subtitle={t("staff.lowHint")}>
+        {lowStockQuery.data?.length === 0 && <Empty>{t("dash.nothingBelow")}</Empty>}
         <ul className="divide-y divide-navy-800">
           {lowStockQuery.data?.map((item) => (
             <li key={item.id} className="py-2 flex items-center justify-between text-sm">
@@ -210,18 +213,20 @@ export function StaffDashboard() {
 }
 
 function WorkOrderRow({ workOrder: wo, action }: { workOrder: MyWorkOrder; action: ReactNode }) {
+  const t = useT();
+  const shortDate = useShortDate();
   return (
     <li className="py-2.5 flex items-start justify-between gap-3 text-sm">
       <div className="min-w-0">
         <p className="text-ink-100">
           {wo.title}
           {wo.status === "IN_PROGRESS" && (
-            <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300">In progress</span>
+            <span className="ms-2 text-xs px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-300">{t("staff.inProgress")}</span>
           )}
         </p>
         {wo.description && <p className="text-xs text-ink-300 truncate">{wo.description}</p>}
         <p className="text-xs text-ink-500">
-          From {wo.createdBy.name} · {shortDate.format(new Date(wo.createdAt))}
+          {t("staff.from", { name: wo.createdBy.name, date: shortDate.format(new Date(wo.createdAt)) })}
         </p>
       </div>
       <div className="shrink-0">{action}</div>

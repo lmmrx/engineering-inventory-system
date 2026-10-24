@@ -1,13 +1,15 @@
+import type { MessageKey } from "../../i18n";
 import { Role } from "../../types";
 
 export interface SettingsItem {
   to: string;
-  label: string;
+  /** Translation key for the menu label. */
+  label: MessageKey;
   roles: Role[];
 }
 
 export interface SettingsGroup {
-  label: string;
+  label: MessageKey;
   items: SettingsItem[];
 }
 
@@ -15,39 +17,38 @@ const ALL_ROLES: Role[] = ["ADMIN", "MANAGER", "STAFF"];
 
 export const SETTINGS_GROUPS: SettingsGroup[] = [
   {
-    label: "Account",
+    // Personal preferences: everyone sets their own.
+    label: "settings.group.customize",
     items: [
-      { to: "profile", label: "Profile", roles: ALL_ROLES },
-      { to: "security", label: "Security", roles: ALL_ROLES },
+      { to: "profile", label: "settings.profile", roles: ALL_ROLES },
+      { to: "profile/appearance", label: "settings.appearance", roles: ALL_ROLES },
+      { to: "profile/language", label: "settings.language", roles: ALL_ROLES },
+      { to: "profile/notifications", label: "settings.notifications", roles: ALL_ROLES },
+      { to: "profile/communications", label: "settings.communications", roles: ALL_ROLES },
     ],
   },
   {
-    label: "Organization",
+    label: "settings.group.account",
+    items: [{ to: "security", label: "settings.security", roles: ALL_ROLES }],
+  },
+  {
+    label: "settings.group.organization",
     items: [
-      { to: "organization/hotels", label: "Hotels", roles: ["ADMIN"] },
-      { to: "organization/users", label: "Users", roles: ["ADMIN", "MANAGER"] },
-      { to: "organization/categories", label: "Categories", roles: ["ADMIN", "MANAGER"] },
-      { to: "organization/departments", label: "Departments", roles: ["ADMIN"] },
+      { to: "organization/hotels", label: "settings.hotels", roles: ["ADMIN"] },
+      { to: "organization/users", label: "settings.users", roles: ["ADMIN", "MANAGER"] },
+      { to: "organization/categories", label: "settings.categories", roles: ["ADMIN", "MANAGER"] },
+      { to: "organization/departments", label: "settings.departments", roles: ["ADMIN"] },
     ],
   },
   {
-    label: "Access",
-    items: [{ to: "roles", label: "Roles & Permissions", roles: ALL_ROLES }],
+    label: "settings.group.access",
+    items: [{ to: "roles", label: "settings.roles", roles: ["ADMIN", "MANAGER"] }],
   },
   {
-    label: "Data",
+    label: "settings.group.data",
     items: [
-      { to: "data", label: "Export data", roles: ["ADMIN", "MANAGER"] },
-      { to: "audit-log", label: "Audit log", roles: ["ADMIN", "MANAGER"] },
-    ],
-  },
-  {
-    label: "Platform",
-    items: [
-      { to: "notifications", label: "Notifications", roles: ["ADMIN"] },
-      { to: "appearance", label: "Appearance", roles: ["ADMIN"] },
-      { to: "language", label: "Language & Region", roles: ["ADMIN"] },
-      { to: "communications", label: "Communications", roles: ["ADMIN"] },
+      { to: "data", label: "settings.export", roles: ["ADMIN", "MANAGER"] },
+      { to: "audit-log", label: "settings.auditLog", roles: ["ADMIN", "MANAGER"] },
     ],
   },
 ];

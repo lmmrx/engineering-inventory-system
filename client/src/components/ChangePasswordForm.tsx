@@ -3,9 +3,11 @@ import { api, setAuthToken } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { CurrentUser, MIN_PASSWORD_LENGTH } from "../types";
 import { PasswordInput } from "./PasswordInput";
+import { useT } from "../i18n";
 
-export function ChangePasswordForm({ submitLabel = "Save password", onChanged }: { submitLabel?: string; onChanged?: () => void }) {
+export function ChangePasswordForm({ submitLabel, onChanged }: { submitLabel?: string; onChanged?: () => void }) {
   const { updateUser } = useAuth();
+  const t = useT();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -19,11 +21,11 @@ export function ChangePasswordForm({ submitLabel = "Save password", onChanged }:
     setSuccess(false);
 
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
-      setError(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+      setError(t("password.tooShort", { min: MIN_PASSWORD_LENGTH }));
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError("New password and confirmation do not match.");
+      setError(t("password.mismatch"));
       return;
     }
 
@@ -43,7 +45,7 @@ export function ChangePasswordForm({ submitLabel = "Save password", onChanged }:
       setConfirmPassword("");
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : "Could not change the password.");
+      setError(err instanceof Error && err.message ? err.message : t("password.changeFailed"));
     } finally {
       setSubmitting(false);
     }
@@ -52,7 +54,7 @@ export function ChangePasswordForm({ submitLabel = "Save password", onChanged }:
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <label className="block">
-        <span className="label-field">Current password</span>
+        <span className="label-field">{t("password.current")}</span>
         <PasswordInput
           required
           autoComplete="current-password"
@@ -62,7 +64,7 @@ export function ChangePasswordForm({ submitLabel = "Save password", onChanged }:
         />
       </label>
       <label className="block">
-        <span className="label-field">New password</span>
+        <span className="label-field">{t("password.new")}</span>
         <PasswordInput
           required
           minLength={MIN_PASSWORD_LENGTH}
@@ -72,11 +74,11 @@ export function ChangePasswordForm({ submitLabel = "Save password", onChanged }:
           className="input-field"
         />
         <span className="block text-xs text-ink-500 mt-1">
-          At least {MIN_PASSWORD_LENGTH} characters. Common passwords aren't accepted.
+          {t("password.hint", { min: MIN_PASSWORD_LENGTH })}
         </span>
       </label>
       <label className="block">
-        <span className="label-field">Confirm new password</span>
+        <span className="label-field">{t("password.confirm")}</span>
         <PasswordInput
           required
           minLength={MIN_PASSWORD_LENGTH}
@@ -89,12 +91,12 @@ export function ChangePasswordForm({ submitLabel = "Save password", onChanged }:
 
       {error && <p className="text-sm text-rose-400">{error}</p>}
       {success && (
-        <p className="text-sm text-emerald-400">Your password has been updated. Other devices have been signed out.</p>
+        <p className="text-sm text-emerald-400">{t("password.changed")}</p>
       )}
 
       <div className="pt-2">
         <button type="submit" disabled={submitting} className="btn-primary">
-          {submitting ? "Saving..." : submitLabel}
+          {submitting ? t("common.saving") : submitLabel ?? t("password.save")}
         </button>
       </div>
     </form>

@@ -7,6 +7,7 @@ import { signToken } from "../lib/auth";
 import { audit } from "../lib/audit";
 import { isPasswordExpired, isWeakPassword, passwordExpiresAt, passwordSchema } from "../lib/password";
 import { FailureLimiter } from "../lib/rateLimit";
+import { readPreferences } from "../lib/preferences";
 import { requireAuth } from "../middleware/auth";
 
 export const authRouter = Router();
@@ -46,11 +47,22 @@ export function publicUser(user: {
   departmentId: string | null;
   mustChangePassword: boolean;
   passwordChangedAt: Date;
+  preferences: unknown;
 }) {
   const { id, name, email, role, hotelId, departmentId, mustChangePassword } = user;
   // Lets the app remind the user before their password expires.
   const passwordExpires = passwordExpiresAt(user.passwordChangedAt);
-  return { id, name, email, role, hotelId, departmentId, mustChangePassword, passwordExpiresAt: passwordExpires };
+  return {
+    id,
+    name,
+    email,
+    role,
+    hotelId,
+    departmentId,
+    mustChangePassword,
+    passwordExpiresAt: passwordExpires,
+    preferences: readPreferences(user.preferences),
+  };
 }
 
 const loginSchema = z.object({

@@ -4,10 +4,16 @@ import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { AuthProvider } from "./context/AuthContext";
+import { PreferencesProvider } from "./context/PreferencesContext";
+import { applyPreferences, loadCachedPreferences } from "./preferences";
 import { registerSW } from "virtual:pwa-register";
 import "./index.css";
 
 const queryClient = new QueryClient();
+
+// Apply this browser's saved theme, font and language before the first paint,
+// so the app doesn't flash dark-then-light (or English-then-another-language).
+applyPreferences(loadCachedPreferences());
 
 // In autoUpdate mode this reloads the page once a newly deployed version has
 // been downloaded and activated, so users never sit on a stale cached build.
@@ -29,7 +35,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <PreferencesProvider>
+            <App />
+          </PreferencesProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

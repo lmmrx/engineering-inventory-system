@@ -5,6 +5,7 @@ import { DepartmentScopeProvider } from "./context/DepartmentScopeContext";
 import { Layout } from "./components/Layout";
 import { RoleGate } from "./components/RoleGate";
 import { Spinner } from "./components/Spinner";
+import { useT } from "./i18n";
 import { useTakingLong } from "./hooks/useTakingLong";
 import zsHoldingsLogo from "./assets/logo-zsholdings.png";
 import { Login } from "./pages/Login";
@@ -25,8 +26,11 @@ import { RolesPermissions } from "./pages/settings/RolesPermissions";
 import { DataExport } from "./pages/settings/DataExport";
 import { AuditLog } from "./pages/settings/AuditLog";
 import { ComingSoon } from "./pages/settings/ComingSoon";
+import { AppearanceSettings } from "./pages/settings/Appearance";
+import { LanguageSettings } from "./pages/settings/Language";
 
 function ProtectedApp() {
+  const t = useT();
   return (
     <HotelScopeProvider>
       <DepartmentScopeProvider>
@@ -81,7 +85,14 @@ function ProtectedApp() {
                 </RoleGate>
               }
             />
-            <Route path="roles" element={<RolesPermissions />} />
+            <Route
+              path="roles"
+              element={
+                <RoleGate roles={["ADMIN", "MANAGER"]}>
+                  <RolesPermissions />
+                </RoleGate>
+              }
+            />
             <Route
               path="data"
               element={
@@ -98,48 +109,18 @@ function ProtectedApp() {
                 </RoleGate>
               }
             />
+            <Route path="profile/appearance" element={<AppearanceSettings />} />
+            <Route path="profile/language" element={<LanguageSettings />} />
             <Route
-              path="notifications"
+              path="profile/notifications"
               element={
-                <RoleGate roles={["ADMIN"]}>
-                  <ComingSoon
-                    title="Notifications"
-                    description="Email and in-app alerts for low stock and pending approvals are planned but not wired up yet — this needs an email provider configured first."
-                  />
-                </RoleGate>
+                <ComingSoon title={t("settings.notifications")} description={t("notifications.description")} />
               }
             />
             <Route
-              path="appearance"
+              path="profile/communications"
               element={
-                <RoleGate roles={["ADMIN"]}>
-                  <ComingSoon
-                    title="Appearance"
-                    description="Property Inventory currently ships as a single dark theme by design. A configurable theme is not planned in the near term."
-                  />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="language"
-              element={
-                <RoleGate roles={["ADMIN"]}>
-                  <ComingSoon
-                    title="Language & region"
-                    description="The interface is English-only today. Localization would need translated strings and a language switcher, neither of which exist yet."
-                  />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="communications"
-              element={
-                <RoleGate roles={["ADMIN"]}>
-                  <ComingSoon
-                    title="Communications"
-                    description="No email or SMS provider is connected yet, so there's nowhere for outbound messages (receipts, digests, alerts) to send from."
-                  />
-                </RoleGate>
+                <ComingSoon title={t("settings.communications")} description={t("communications.description")} />
               }
             />
           </Route>

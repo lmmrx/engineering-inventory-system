@@ -18,6 +18,7 @@ import { requireAuth } from "./middleware/auth";
 import { asyncHandler } from "./lib/asyncHandler";
 import { audit, diff } from "./lib/audit";
 import { prisma } from "./lib/prisma";
+import { preferencesSchema, readPreferences } from "./lib/preferences";
 
 export function createApp() {
   const app = express();
@@ -92,7 +93,11 @@ export function createApp() {
     })
   );
 
-  const updateMeSchema = z.object({ name: z.string().min(1) });
+  // Users can change their own name and display preferences, nothing else.
+  const updateMeSchema = z
+    .object({ name: z.string().trim().min(1).max(100), preferences: preferencesSchema })
+    .partial()
+    .strict();
 
   app.patch(
     "/me",
@@ -104,9 +109,15 @@ export function createApp() {
       const before = await prisma.user.findUnique({ where: { id: req.user!.userId } });
       const user = await prisma.user.update({
         where: { id: req.user!.userId },
-        data: { name: parsed.data.name },
+        data: {
+          name: parsed.data.name,
+          // Merged, so changing the theme doesn't reset the language.
+          preferences: parsed.data.preferences
+            ? { ...readPreferences(before?.preferences), ...parsed.data.preferences }
+            : undefined,
+        },
       });
-      if (before && before.name !== user.name) {
+      if (before && parsed.data.name && before.name !== user.name) {
         await audit(req, {
           action: "user.updated",
           entityId: user.id,

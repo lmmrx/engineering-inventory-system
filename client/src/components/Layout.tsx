@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { MessageKey, useT } from "../i18n";
 import { Role } from "../types";
 import { Footer } from "./Footer";
 import { PasswordExpiryBanner } from "./PasswordExpiryBanner";
@@ -58,12 +59,12 @@ const ICONS = {
   ),
 };
 
-const NAV: { to: string; label: string; icon: ReactNode; end?: boolean; roles?: Role[] }[] = [
-  { to: "/", label: "Dashboard", icon: ICONS.dashboard, end: true },
-  { to: "/inventory", label: "Inventory", icon: ICONS.inventory },
-  { to: "/purchase-requests", label: "Purchase Requests", icon: ICONS.purchase },
-  { to: "/work-orders", label: "Work Orders", icon: ICONS.workOrders },
-  { to: "/analytics", label: "Analytics", icon: ICONS.analytics, roles: ["ADMIN", "MANAGER"] },
+const NAV: { to: string; label: MessageKey; icon: ReactNode; end?: boolean; roles?: Role[] }[] = [
+  { to: "/", label: "nav.dashboard", icon: ICONS.dashboard, end: true },
+  { to: "/inventory", label: "nav.inventory", icon: ICONS.inventory },
+  { to: "/purchase-requests", label: "nav.purchaseRequests", icon: ICONS.purchase },
+  { to: "/work-orders", label: "nav.workOrders", icon: ICONS.workOrders },
+  { to: "/analytics", label: "nav.analytics", icon: ICONS.analytics, roles: ["ADMIN", "MANAGER"] },
 ];
 
 // Remembered per browser; storage can be unavailable (private mode), so every access is guarded.
@@ -103,6 +104,7 @@ function MenuIcon() {
 
 export function Layout() {
   const { user } = useAuth();
+  const t = useT();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -136,12 +138,13 @@ export function Layout() {
       <div className="flex h-full flex-col">
         <div className={`flex items-center gap-2 py-4 ${compact ? "justify-center px-2" : "px-4"}`}>
           <img src={zsHoldingsLogo} alt="ZS Holdings" className={`w-auto flex-none ${compact ? "h-6" : "h-7"}`} />
-          {!compact && <span className="font-semibold text-ink-100 whitespace-nowrap flex-1 truncate">Property Inventory</span>}
+          {/* Wraps rather than cutting off, since some languages' names are longer. */}
+          {!compact && <span className="font-semibold text-ink-100 flex-1 min-w-0 leading-tight break-words">{t("app.name")}</span>}
           {onPhone && (
             <button
               onClick={() => setDrawerOpen(false)}
-              className="h-9 w-9 -mr-1.5 flex items-center justify-center rounded-md text-ink-300 hover:bg-navy-800 hover:text-ink-100"
-              aria-label="Close menu"
+              className="h-9 w-9 -me-1.5 flex items-center justify-center rounded-md text-ink-300 hover:bg-navy-800 hover:text-ink-100"
+              aria-label={t("nav.closeMenu")}
             >
               <Icon>
                 <path d="M6 6l12 12M18 6 6 18" />
@@ -157,18 +160,18 @@ export function Layout() {
               to={item.to}
               end={item.end}
               className={linkClass}
-              title={compact ? item.label : undefined}
+              title={compact ? t(item.label) : undefined}
             >
               {item.icon}
-              {!compact && <span className="truncate">{item.label}</span>}
+              {!compact && <span className="truncate">{t(item.label)}</span>}
             </NavLink>
           ))}
 
           <div className="my-2 border-t border-navy-800" />
 
-          <NavLink to="/settings" className={linkClass} title={compact ? "Settings" : undefined}>
+          <NavLink to="/settings" className={linkClass} title={compact ? t("nav.settings") : undefined}>
             {ICONS.settings}
-            {!compact && <span>Settings</span>}
+            {!compact && <span>{t("nav.settings")}</span>}
           </NavLink>
         </nav>
 
@@ -179,11 +182,11 @@ export function Layout() {
               className={`flex items-center gap-3 rounded-md text-sm text-ink-500 hover:bg-navy-800 hover:text-ink-100 transition ${
                 compact ? "justify-center h-10 w-10" : "w-full px-3 py-2"
               }`}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
+              title={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
             >
               <CollapseIcon collapsed={collapsed} />
-              {!compact && <span>Collapse</span>}
+              {!compact && <span>{t("nav.collapse")}</span>}
             </button>
           )}
           <UserMenu placement="sidebar" compact={compact} />
@@ -196,7 +199,7 @@ export function Layout() {
     <div className="min-h-screen bg-navy-950">
       {/* Desktop: a fixed sidebar that folds down to icons. */}
       <aside
-        className={`hidden lg:block fixed inset-y-0 left-0 z-20 border-r border-navy-800 bg-navy-950 transition-[width] duration-200 ${
+        className={`hidden lg:block fixed inset-y-0 start-0 z-20 border-e border-navy-800 bg-navy-950 transition-[width] duration-200 ${
           collapsed ? "w-16" : "w-60"
         }`}
       >
@@ -209,28 +212,28 @@ export function Layout() {
         <div className="px-4 py-2.5 flex items-center gap-3">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="h-9 w-9 -ml-1.5 flex items-center justify-center rounded-md text-ink-300 hover:bg-navy-800 hover:text-ink-100"
-            aria-label="Open menu"
+            className="h-9 w-9 -ms-1.5 flex items-center justify-center rounded-md text-ink-300 hover:bg-navy-800 hover:text-ink-100"
+            aria-label={t("nav.openMenu")}
             aria-expanded={drawerOpen}
           >
             <MenuIcon />
           </button>
           <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-6 w-auto" />
-          <span className="font-semibold text-ink-100 flex-1 truncate">Property Inventory</span>
+          <span className="font-semibold text-ink-100 flex-1 truncate">{t("app.name")}</span>
           <UserMenu placement="topbar" />
         </div>
       </header>
 
       {drawerOpen && (
-        <div className="lg:hidden fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Menu">
+        <div className="lg:hidden fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={t("nav.openMenu")}>
           <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-navy-950 border-r border-navy-800 shadow-2xl pt-[env(safe-area-inset-top)]">
+          <aside className="absolute inset-y-0 start-0 w-72 max-w-[85vw] bg-navy-950 border-e border-navy-800 shadow-2xl pt-[env(safe-area-inset-top)]">
             {sidebar(false, true)}
           </aside>
         </div>
       )}
 
-      <div className={`flex min-h-screen flex-col transition-[padding] duration-200 ${collapsed ? "lg:pl-16" : "lg:pl-60"}`}>
+      <div className={`flex min-h-screen flex-col transition-[padding] duration-200 ${collapsed ? "lg:ps-16" : "lg:ps-60"}`}>
         <main className="mx-auto max-w-[1600px] px-4 py-6 flex-1 w-full">
           <PasswordExpiryBanner />
           <Outlet />
