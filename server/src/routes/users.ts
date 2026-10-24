@@ -6,7 +6,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { audit, created, diff } from "../lib/audit";
 import { passwordSchema } from "../lib/password";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { NO_SCOPE, requireAuth, requireRole } from "../middleware/auth";
 
 export const usersRouter = Router();
 
@@ -33,7 +33,7 @@ usersRouter.get(
     // their own hotel or other hotels in their own department.
     const where =
       req.user!.role === "MANAGER"
-        ? { hotelId: req.user!.hotelId ?? undefined, departmentId: req.user!.departmentId ?? undefined }
+        ? { hotelId: req.user!.hotelId ?? NO_SCOPE, departmentId: req.user!.departmentId ?? NO_SCOPE }
         : {};
     const users = await prisma.user.findMany({ where, select: publicSelect, orderBy: { name: "asc" } });
     res.json(users);
@@ -42,7 +42,7 @@ usersRouter.get(
 
 const createSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: passwordSchema,
   role: z.enum(["ADMIN", "MANAGER", "STAFF"]),
   hotelId: z.string().nullable().optional(),
@@ -66,7 +66,12 @@ usersRouter.post(
       }
     }
 
-    const existing = await prisma.user.findUnique({ where: { email: data.email } });
+    if (data.role !== "ADMIN" && (!data.hotelId || !data.departmentId)) {
+      return res.status(400).json({ error: "Managers and Staff need both a hotel and a department" });
+    }
+
+    // Older accounts may have mixed-case emails, so compare case-insensitively.
+    const existing = await prisma.user.findFirst({ where: { email: { equals: data.email, mode: "insensitive" } } });
     if (existing) {
       return res.status(409).json({ error: "A user with this email already exists" });
     }
@@ -154,6 +159,13 @@ usersRouter.patch(
 
     if (parsed.data.role && parsed.data.role !== "ADMIN" && (await isLastActiveAdmin(existing))) {
       return res.status(400).json({ error: "This is the only active Admin — make someone else an Admin first" });
+    }
+
+    const role = parsed.data.role ?? existing.role;
+    const hotelId = parsed.data.hotelId !== undefined ? parsed.data.hotelId : existing.hotelId;
+    const departmentId = parsed.data.departmentId !== undefined ? parsed.data.departmentId : existing.departmentId;
+    if (role !== "ADMIN" && (!hotelId || !departmentId)) {
+      return res.status(400).json({ error: "Managers and Staff need both a hotel and a department" });
     }
 
     const { password, ...rest } = parsed.data;

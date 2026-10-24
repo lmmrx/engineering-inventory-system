@@ -55,6 +55,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/**
+ * Matches no real record. A Manager/Staff account missing its hotel or
+ * department is scoped to this, so it sees nothing rather than everything.
+ */
+export const NO_SCOPE = "__none__";
+
 export function requireRole(...roles: Role[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {
@@ -74,7 +80,7 @@ export function resolveHotelScope(req: Request): string | undefined {
     const q = req.query.hotelId;
     return typeof q === "string" ? q : undefined;
   }
-  return req.user!.hotelId ?? undefined;
+  return req.user!.hotelId ?? NO_SCOPE;
 }
 
 /**
@@ -87,5 +93,5 @@ export function resolveDepartmentScope(req: Request): string | undefined {
     const q = req.query.departmentId;
     return typeof q === "string" ? q : undefined;
   }
-  return req.user!.departmentId ?? undefined;
+  return req.user!.departmentId ?? NO_SCOPE;
 }

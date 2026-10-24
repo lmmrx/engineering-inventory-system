@@ -31,25 +31,6 @@ itemsRouter.get(
   })
 );
 
-itemsRouter.get(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const item = await prisma.inventoryItem.findUnique({
-      where: { id: req.params.id },
-      include: { category: true, hotel: true },
-    });
-    if (!item) return res.status(404).json({ error: "Item not found" });
-
-    const hotelId = resolveHotelScope(req);
-    if (hotelId && item.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
-
-    const departmentId = resolveDepartmentScope(req);
-    if (departmentId && item.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
-
-    res.json(item);
-  })
-);
-
 /** An item's category must belong to the item's own department. */
 async function categoryMismatch(categoryId: string, departmentId: string) {
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
@@ -60,7 +41,7 @@ const upsertSchema = z.object({
   name: z.string().min(1),
   sku: z.string().optional(),
   unit: z.string().min(1).default("ea"),
-  quantityOnHand: z.number().int().min(0).default(0),
+  quantityOnHand: z.number().int().min(0).max(1_000_000).default(0),
   reorderPoint: z.number().int().min(0).default(0),
   maxLevel: z.number().int().min(0).nullable().optional(),
   unitCost: z.number().min(0).nullable().optional(),
@@ -99,7 +80,23 @@ itemsRouter.post(
       }
     }
 
-    const item = await prisma.inventoryItem.create({ data: parsed.data });
+    // Starting stock goes in the ledger like any other movement, so the
+    // transaction history and movement report account for it.
+    const item = await prisma.$transaction(async (tx) => {
+      const created = await tx.inventoryItem.create({ data: parsed.data });
+      if (created.quantityOnHand > 0) {
+        await tx.stockTransaction.create({
+          data: {
+            itemId: created.id,
+            type: "ADJUSTMENT",
+            quantity: created.quantityOnHand,
+            notes: "Opening stock",
+            performedByUserId: req.user!.userId,
+          },
+        });
+      }
+      return created;
+    });
     await audit(req, {
       action: "item.created",
       entityId: item.id,
@@ -116,7 +113,8 @@ itemsRouter.patch(
   "/:id",
   requireRole("ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
-    const parsed = upsertSchema.partial().safeParse(req.body);
+    // On-hand quantity only changes through stock transactions, never a direct edit.
+    const parsed = upsertSchema.omit({ quantityOnHand: true }).partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
     const existing = await prisma.inventoryItem.findUnique({ where: { id: req.params.id } });
@@ -159,7 +157,7 @@ itemsRouter.patch(
     }
 
     const item = await prisma.inventoryItem.update({ where: { id: req.params.id }, data: parsed.data });
-    const changes = await diff(existing, item, ["name", "sku", "unit", "quantityOnHand", "reorderPoint", "maxLevel", "unitCost", "location", "hotelId", "departmentId", "categoryId"]);
+    const changes = await diff(existing, item, ["name", "sku", "unit", "reorderPoint", "maxLevel", "unitCost", "location", "hotelId", "departmentId", "categoryId"]);
     if (Object.keys(changes).length > 0) {
       await audit(req, {
         action: "item.updated",

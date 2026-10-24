@@ -35,7 +35,8 @@ transactionsRouter.get(
 const createSchema = z.object({
   itemId: z.string().min(1),
   type: z.enum(["RECEIVE", "ISSUE", "ADJUSTMENT"]),
-  quantity: z.number().int(),
+  // Bounded so a typo can't overflow the stock column (a 32-bit integer).
+  quantity: z.number().int().min(-1_000_000).max(1_000_000).refine((q) => q !== 0, "Quantity can't be zero"),
   notes: z.string().optional(),
   workOrderId: z.string().optional(),
   purchaseRequestId: z.string().optional(),
@@ -77,14 +78,15 @@ transactionsRouter.post(
   else if (type === "ISSUE") delta = -Math.abs(quantity);
   else delta = quantity;
 
-  const newQuantity = item.quantityOnHand + delta;
-  if (newQuantity < 0) {
-    return res.status(400).json({ error: "Transaction would result in negative stock" });
-  }
-
-  const [, transaction] = await prisma.$transaction([
-    prisma.inventoryItem.update({ where: { id: itemId }, data: { quantityOnHand: newQuantity } }),
-    prisma.stockTransaction.create({
+  // Applied as an increment guarded by the current stock, so two people issuing
+  // the same item at once can't overwrite each other or drive it below zero.
+  const transaction = await prisma.$transaction(async (tx) => {
+    const { count } = await tx.inventoryItem.updateMany({
+      where: { id: itemId, quantityOnHand: { gte: -delta } },
+      data: { quantityOnHand: { increment: delta } },
+    });
+    if (count === 0) return null;
+    return tx.stockTransaction.create({
       data: {
         itemId,
         type,
@@ -95,8 +97,11 @@ transactionsRouter.post(
         purchaseRequestId,
       },
       include: { item: true },
-    }),
-  ]);
+    });
+  });
+  if (!transaction) {
+    return res.status(400).json({ error: "Transaction would result in negative stock" });
+  }
 
   res.status(201).json(transaction);
   })

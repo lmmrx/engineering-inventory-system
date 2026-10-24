@@ -99,6 +99,19 @@ async function loadInScope(req: Request, id: string) {
   return { purchaseRequest };
 }
 
+/**
+ * Moves a still-pending request to APPROVED or REJECTED. The status check is
+ * part of the update itself, so a request can't be decided twice — e.g.
+ * re-approving a RECEIVED request would let it be received (and stocked) again.
+ */
+async function decide(id: string, status: "APPROVED" | "REJECTED", userId: string) {
+  const { count } = await prisma.purchaseRequest.updateMany({
+    where: { id, status: "PENDING" },
+    data: { status, approvedByUserId: userId, decidedAt: new Date() },
+  });
+  return count === 0 ? null : prisma.purchaseRequest.findUniqueOrThrow({ where: { id } });
+}
+
 purchaseRequestsRouter.patch(
   "/:id/approve",
   requireRole("ADMIN", "MANAGER"),
@@ -107,10 +120,8 @@ purchaseRequestsRouter.patch(
     if (result.error === 404) return res.status(404).json({ error: "Purchase request not found" });
     if (result.error === 403) return res.status(403).json({ error: "Forbidden" });
 
-    const purchaseRequest = await prisma.purchaseRequest.update({
-      where: { id: req.params.id },
-      data: { status: "APPROVED", approvedByUserId: req.user!.userId, decidedAt: new Date() },
-    });
+    const purchaseRequest = await decide(req.params.id, "APPROVED", req.user!.userId);
+    if (!purchaseRequest) return res.status(409).json({ error: "Only pending purchase requests can be approved" });
     await audit(req, {
       action: "purchase_request.approved",
       entityId: purchaseRequest.id,
@@ -131,10 +142,8 @@ purchaseRequestsRouter.patch(
     if (result.error === 404) return res.status(404).json({ error: "Purchase request not found" });
     if (result.error === 403) return res.status(403).json({ error: "Forbidden" });
 
-    const purchaseRequest = await prisma.purchaseRequest.update({
-      where: { id: req.params.id },
-      data: { status: "REJECTED", approvedByUserId: req.user!.userId, decidedAt: new Date() },
-    });
+    const purchaseRequest = await decide(req.params.id, "REJECTED", req.user!.userId);
+    if (!purchaseRequest) return res.status(409).json({ error: "Only pending purchase requests can be rejected" });
     await audit(req, {
       action: "purchase_request.rejected",
       entityId: purchaseRequest.id,
@@ -177,44 +186,49 @@ purchaseRequestsRouter.patch(
       return res.status(400).json({ error: "Only approved purchase requests can be received" });
     }
 
-    const ops = [];
+    // Each line counts once, even if the body repeats it.
+    const lines = new Map<string, number>();
     for (const line of parsed.data.items) {
-      const prItem = purchaseRequest.items.find((i) => i.id === line.purchaseRequestItemId);
-      if (!prItem || line.quantityReceived <= 0) continue;
+      if (line.quantityReceived > 0 && purchaseRequest.items.some((i) => i.id === line.purchaseRequestItemId)) {
+        lines.set(line.purchaseRequestItemId, line.quantityReceived);
+      }
+    }
 
-      ops.push(
-        prisma.inventoryItem.update({
+    const alreadyReceived = await prisma.$transaction(async (tx) => {
+      // Claim the request first: of two simultaneous submissions only one
+      // finds it still APPROVED, so stock can't be received twice.
+      const { count } = await tx.purchaseRequest.updateMany({
+        where: { id: purchaseRequest.id, status: "APPROVED" },
+        data: { status: "RECEIVED", receivedAt: new Date() },
+      });
+      if (count === 0) return true;
+
+      for (const [prItemId, quantityReceived] of lines) {
+        const prItem = purchaseRequest.items.find((i) => i.id === prItemId)!;
+        await tx.inventoryItem.update({
           where: { id: prItem.itemId },
-          data: { quantityOnHand: { increment: line.quantityReceived } },
-        })
-      );
-      ops.push(
-        prisma.stockTransaction.create({
+          data: { quantityOnHand: { increment: quantityReceived } },
+        });
+        await tx.stockTransaction.create({
           data: {
             itemId: prItem.itemId,
             type: "RECEIVE",
-            quantity: line.quantityReceived,
+            quantity: quantityReceived,
             performedByUserId: req.user!.userId,
             purchaseRequestId: purchaseRequest.id,
             notes: "Received from purchase request",
           },
-        })
-      );
-      ops.push(
-        prisma.purchaseRequestItem.update({
+        });
+        await tx.purchaseRequestItem.update({
           where: { id: prItem.id },
-          data: { quantityReceived: { increment: line.quantityReceived } },
-        })
-      );
+          data: { quantityReceived: { increment: quantityReceived } },
+        });
+      }
+      return false;
+    }, { timeout: 20_000 });
+    if (alreadyReceived) {
+      return res.status(409).json({ error: "This purchase request has already been received" });
     }
-    ops.push(
-      prisma.purchaseRequest.update({
-        where: { id: purchaseRequest.id },
-        data: { status: "RECEIVED", receivedAt: new Date() },
-      })
-    );
-
-    await prisma.$transaction(ops);
 
     const updated = await prisma.purchaseRequest.findUnique({
       where: { id: purchaseRequest.id },

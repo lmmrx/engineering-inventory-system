@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { audit, created, diff } from "../lib/audit";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { NO_SCOPE, requireAuth, requireRole } from "../middleware/auth";
 
 export const categoriesRouter = Router();
 
@@ -15,9 +15,9 @@ categoriesRouter.get(
     // Non-admins can only ever browse their own department's categories,
     // regardless of what departmentId they pass in the query string.
     const requested = typeof req.query.departmentId === "string" ? req.query.departmentId : undefined;
-    const departmentId = req.user!.role === "ADMIN" ? requested : req.user!.departmentId ?? undefined;
+    const departmentId = req.user!.role === "ADMIN" ? requested : req.user!.departmentId ?? NO_SCOPE;
     const categories = await prisma.category.findMany({
-      where: { departmentId: departmentId ?? undefined },
+      where: { departmentId },
       orderBy: { name: "asc" },
     });
     res.json(categories);
@@ -80,29 +80,21 @@ categoriesRouter.patch(
   "/:id",
   requireRole("ADMIN", "MANAGER"),
   asyncHandler(async (req, res) => {
-    const parsed = upsertSchema.partial().safeParse(req.body);
+    // A category stays in its department: moving it would leave its items and
+    // subcategories filed under a category from another department.
+    const parsed = upsertSchema.omit({ departmentId: true }).partial().safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
     const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Category not found" });
 
-    if (req.user!.role === "MANAGER") {
-      if (existing.departmentId !== req.user!.departmentId) {
-        return res.status(403).json({ error: "Forbidden" });
-      }
-      if (parsed.data.departmentId && parsed.data.departmentId !== req.user!.departmentId) {
-        return res.status(403).json({ error: "Managers may only manage categories in their own department" });
-      }
+    if (req.user!.role === "MANAGER" && existing.departmentId !== req.user!.departmentId) {
+      return res.status(403).json({ error: "Forbidden" });
     }
 
     if (parsed.data.name) {
       const duplicate = await prisma.category.findUnique({
-        where: {
-          departmentId_name: {
-            departmentId: parsed.data.departmentId ?? existing.departmentId,
-            name: parsed.data.name,
-          },
-        },
+        where: { departmentId_name: { departmentId: existing.departmentId, name: parsed.data.name } },
       });
       if (duplicate && duplicate.id !== existing.id) {
         return res.status(409).json({ error: "A category with this name already exists" });
@@ -114,16 +106,12 @@ categoriesRouter.patch(
       if (parsed.data.parentId && hasChildren) {
         return res.status(400).json({ error: "A category with subcategories can't itself become a subcategory" });
       }
-      const parentError = await validateParent(
-        parsed.data.parentId,
-        parsed.data.departmentId ?? existing.departmentId,
-        existing.id
-      );
+      const parentError = await validateParent(parsed.data.parentId, existing.departmentId, existing.id);
       if (parentError) return res.status(400).json({ error: parentError });
     }
 
     const category = await prisma.category.update({ where: { id: req.params.id }, data: parsed.data });
-    const changes = await diff(existing, category, ["name", "parentId", "departmentId"]);
+    const changes = await diff(existing, category, ["name", "parentId"]);
     if (Object.keys(changes).length > 0) {
       await audit(req, {
         action: "category.updated",

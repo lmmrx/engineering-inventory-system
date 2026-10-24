@@ -27,25 +27,6 @@ workOrdersRouter.get(
   })
 );
 
-workOrdersRouter.get(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const workOrder = await prisma.workOrder.findUnique({
-      where: { id: req.params.id },
-      include: { transactions: { include: { item: true } }, createdBy: true, assignedTo: true },
-    });
-    if (!workOrder) return res.status(404).json({ error: "Work order not found" });
-
-    const hotelId = resolveHotelScope(req);
-    if (hotelId && workOrder.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
-
-    const departmentId = resolveDepartmentScope(req);
-    if (departmentId && workOrder.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
-
-    res.json(workOrder);
-  })
-);
-
 /** The assignee must be an active user who works in the work order's hotel and department, or an Admin. */
 async function invalidAssignee(userId: string | null | undefined, hotelId: string, departmentId: string) {
   if (!userId) return false;
@@ -120,7 +101,9 @@ workOrdersRouter.patch(
     }
 
     const data = { ...parsed.data } as Record<string, unknown>;
-    if (parsed.data.status === "COMPLETED") data.completedAt = new Date();
+    // Stamp completion once; reopening clears it so "days open" stays right.
+    if (parsed.data.status === "COMPLETED" && existing.status !== "COMPLETED") data.completedAt = new Date();
+    else if (parsed.data.status && parsed.data.status !== "COMPLETED") data.completedAt = null;
 
     const workOrder = await prisma.workOrder.update({ where: { id: req.params.id }, data });
     const changes = await diff(existing, workOrder, ["title", "description", "status", "assignedToUserId"]);

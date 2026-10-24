@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { audit, created, diff } from "../lib/audit";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { NO_SCOPE, requireAuth, requireRole } from "../middleware/auth";
 
 export const hotelsRouter = Router();
 
@@ -18,7 +18,7 @@ hotelsRouter.get(
     }
     // Manager/Staff only ever need their own hotel — never the full portfolio.
     const hotels = await prisma.hotel.findMany({
-      where: { id: req.user!.hotelId ?? undefined },
+      where: { id: req.user!.hotelId ?? NO_SCOPE },
       orderBy: { name: "asc" },
     });
     res.json(hotels);

@@ -68,7 +68,11 @@ authRouter.post(
     const ipBlockedFor = ipLimiter.retryAfter(ipKey);
     if (ipBlockedFor > 0) return tooManyAttempts(res, ipBlockedFor);
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    // Emails are matched case-insensitively ("Jane@Hotel.com" signs in as
+    // jane@hotel.com); an exact match wins if older data has both spellings.
+    const user =
+      (await prisma.user.findUnique({ where: { email } })) ??
+      (await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } } }));
     const now = Date.now();
     const lockedFor = user
       ? user.lockedUntil && user.lockedUntil.getTime() > now
