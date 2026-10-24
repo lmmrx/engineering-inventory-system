@@ -132,6 +132,74 @@ export interface DashboardSummary {
   runningOut: RunningOutItem[];
 }
 
+interface AnalyticsItem {
+  id: string;
+  name: string;
+  unit: string;
+  hotelCode: string;
+  onHand: number;
+  reorderPoint: number;
+}
+
+export interface ItemForecast extends AnalyticsItem {
+  next7: number;
+  next28: number;
+  /** % change in usage, last 4 weeks vs the 4 before; null without 8 weeks of history. */
+  change: number | null;
+  /** null = lasts over a year at the forecast rate. */
+  daysLeft: number | null;
+  runOutDate: string | null;
+  confidence: "normal" | "low";
+  weeklyHistory: number[];
+  weeklyForecast: number[];
+  historyWeeks: number;
+}
+
+export interface ReorderPointAdvice extends AnalyticsItem {
+  current: number;
+  suggested: number;
+  status: "too_low" | "too_high";
+  leadTimeDays: number;
+  leadTimeMeasured: boolean;
+  leadTimeBasis: "item" | "department";
+  dailyRate: number;
+}
+
+export interface UsageAnomaly {
+  transactionId: string;
+  date: string;
+  itemId: string;
+  itemName: string;
+  hotelCode: string;
+  quantity: number;
+  performedBy: string;
+  notes: string | null;
+  kind: "large_issue" | "large_write_off";
+  typical: number;
+  reason: string;
+}
+
+export interface IdleStock extends AnalyticsItem {
+  kind: "dead" | "slow";
+  value: number | null;
+  lastUsedAt: string | null;
+  idleDays: number;
+  daysOfCover: number | null;
+}
+
+export interface Analytics {
+  generatedAt: string;
+  historyDays: number;
+  forecastDays: number;
+  leadTime: { days: number; measured: boolean; samples: number };
+  settings: { deadAfterDays: number; slowCoverDays: number; anomalyWindowDays: number };
+  forecasts: ItemForecast[];
+  reorderPoints: ReorderPointAdvice[];
+  anomalies: UsageAnomaly[];
+  deadStock: IdleStock[];
+  deadStockValue: number;
+}
+
 export interface AuditLogEntry {
   id: string;
   createdAt: string;

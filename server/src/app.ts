@@ -2,6 +2,7 @@ import cors from "cors";
 import helmet from "helmet";
 import express, { NextFunction, Request, Response } from "express";
 import { z } from "zod";
+import { analyticsRouter } from "./routes/analytics";
 import { auditLogsRouter } from "./routes/auditLogs";
 import { authRouter } from "./routes/auth";
 import { categoriesRouter } from "./routes/categories";
@@ -71,6 +72,7 @@ export function createApp() {
   app.use("/export", exportRouter);
   app.use("/dashboard", dashboardRouter);
   app.use("/audit-logs", auditLogsRouter);
+  app.use("/analytics", analyticsRouter);
 
   app.get(
     "/departments",

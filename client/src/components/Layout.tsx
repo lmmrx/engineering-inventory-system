@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { Footer } from "./Footer";
+import { RoleGate } from "./RoleGate";
 import { UserMenu } from "./UserMenu";
 import zsHoldingsLogo from "../assets/logo-zsholdings.png";
 
@@ -34,6 +35,11 @@ export function Layout() {
             <NavLink to="/work-orders" className={navLinkClass}>
               Work Orders
             </NavLink>
+            <RoleGate roles={["ADMIN", "MANAGER"]}>
+              <NavLink to="/analytics" className={navLinkClass}>
+                Analytics
+              </NavLink>
+            </RoleGate>
           </nav>
 
           <UserMenu />

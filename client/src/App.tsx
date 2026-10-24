@@ -13,6 +13,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Inventory } from "./pages/Inventory";
 import { PurchaseRequests } from "./pages/PurchaseRequests";
 import { WorkOrders } from "./pages/WorkOrders";
+import { Analytics } from "./pages/Analytics";
 import { SettingsIndex, SettingsLayout } from "./pages/settings/SettingsLayout";
 import { ProfileSettings } from "./pages/settings/Profile";
 import { SecuritySettings } from "./pages/settings/Security";
@@ -35,6 +36,14 @@ function ProtectedApp() {
           <Route path="inventory" element={<Inventory />} />
           <Route path="purchase-requests" element={<PurchaseRequests />} />
           <Route path="work-orders" element={<WorkOrders />} />
+          <Route
+            path="analytics"
+            element={
+              <RoleGate roles={["ADMIN", "MANAGER"]}>
+                <Analytics />
+              </RoleGate>
+            }
+          />
 
           <Route path="settings" element={<SettingsLayout />}>
             <Route index element={<SettingsIndex />} />
