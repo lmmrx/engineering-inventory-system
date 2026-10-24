@@ -3,7 +3,8 @@ import { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { recordRef as ref } from "../lib/audit";
-import { DAY_MS, StockStatus, dailyUsage, recentIssuedByItem, stockStatus } from "../lib/stock";
+import { DAY_MS, StockStatus, stockStatus } from "../lib/stock";
+import { loadOutlooks } from "../lib/usage";
 import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 import { auditLogInclude, auditLogWhere } from "./auditLogs";
 
@@ -152,16 +153,17 @@ exportRouter.get(
   "/stock",
   asyncHandler(async (req, res) => {
     const { hotelId, departmentId, itemScope } = scope(req);
-    const now = Date.now();
-    const [items, issuedQty, openLines] = await Promise.all([
+    const [items, openLines] = await Promise.all([
       prisma.inventoryItem.findMany({ where: { hotelId, departmentId }, include: itemInclude }),
-      recentIssuedByItem(itemScope, now),
       // Already requested but not yet received — counted so the list doesn't double-order.
       prisma.purchaseRequestItem.findMany({
         where: { purchaseRequest: { hotelId, departmentId, status: { in: ["PENDING", "APPROVED"] } } },
         select: { itemId: true, quantityRequested: true, quantityReceived: true },
       }),
     ]);
+
+    // The same forecast as the Dashboard and Analytics page, so the numbers match.
+    const outlooks = await loadOutlooks(itemScope, items, req.query.tz);
 
     const onOrder = new Map<string, number>();
     for (const line of openLines) {
@@ -171,14 +173,16 @@ exportRouter.get(
     const rows = items
       .map((i) => {
         const status = stockStatus(i);
-        const usage = dailyUsage(issuedQty.get(i.id) ?? 0, i.createdAt, now);
+        const outlook = outlooks.get(i.id);
+        const usage = outlook?.dailyRate ?? 0;
         const ordered = onOrder.get(i.id) ?? 0;
         // Only items at or below their reorder point need ordering: refill to
         // the max level, or without one, to twice the reorder point.
         const needsOrder = i.quantityOnHand <= i.reorderPoint;
         const target = i.maxLevel ?? i.reorderPoint * 2;
         const suggested = needsOrder ? Math.max(0, target - i.quantityOnHand - ordered) : 0;
-        const daysOfCover = usage > 0 ? Math.floor(i.quantityOnHand / usage) : null;
+        // Blank when the item isn't being used; over a year sorts last among used items.
+        const daysOfCover = outlook ? outlook.daysLeft ?? 366 : null;
         return { item: i, status, usage, ordered, suggested, daysOfCover };
       })
       // Out, then low, then the rest; within a status, fastest running out first.
@@ -194,7 +198,7 @@ exportRouter.get(
       res,
       [
         "Hotel", "Group", "Subcategory", "Item", "SKU", "Unit", "Location", "On Hand", "Reorder Point", "Max Level",
-        "Status", "Avg Daily Use (30d)", "Days of Cover", "On Open Purchase Requests", "Suggested Order Qty",
+        "Status", "Forecast Daily Use", "Days of Cover", "On Open Purchase Requests", "Suggested Order Qty",
         "Unit Cost", "Stock Value", "Est. Order Cost",
       ],
       rows.map(({ item: i, status, usage, ordered, suggested, daysOfCover }) => [
@@ -209,7 +213,7 @@ exportRouter.get(
         i.maxLevel ?? "",
         STATUS_LABEL[status],
         Math.round(usage * 10) / 10,
-        daysOfCover ?? "",
+        daysOfCover === null ? "" : daysOfCover > 365 ? "365+" : daysOfCover,
         ordered,
         suggested,
         money(i.unitCost),

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
+import { StaffDashboard } from "./StaffDashboard";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { DashboardSummary, InventoryItem, StockHealth, StockTransaction } from "../types";
@@ -24,7 +26,13 @@ const HEALTH_SEGMENTS: { key: keyof StockHealth; label: string; color: string }[
 
 const numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
 
+/** Staff see their own work first; Managers and Admins see the whole operation. */
 export function Dashboard() {
+  const { user } = useAuth();
+  return user?.role === "STAFF" ? <StaffDashboard /> : <TeamDashboard />;
+}
+
+function TeamDashboard() {
   const { selectedHotelId } = useHotelScope();
   const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
@@ -33,7 +41,12 @@ export function Dashboard() {
 
   const summaryQuery = useQuery({
     queryKey: ["dashboard-summary", selectedHotelId, selectedDepartmentId],
-    queryFn: () => api.get<DashboardSummary>(`/dashboard/summary?${hotelParam}departmentId=${selectedDepartmentId}`),
+    queryFn: () =>
+      api.get<DashboardSummary>(
+        `/dashboard/summary?${hotelParam}departmentId=${selectedDepartmentId}&tz=${encodeURIComponent(
+          Intl.DateTimeFormat().resolvedOptions().timeZone
+        )}`
+      ),
     enabled: ready,
   });
 
@@ -104,7 +117,7 @@ export function Dashboard() {
         <section className="card p-4">
           <h2 className="font-semibold text-ink-100">Running out soonest</h2>
           <p className="text-xs text-ink-500 mb-3">
-            Days of cover at the last {summary?.usageWindowDays ?? 30} days' usage rate
+            Forecast from each item's usage pattern — same as Analytics
           </p>
           {summary?.runningOut.length === 0 && (
             <p className="text-sm text-ink-500">No items issued in this period yet.</p>
@@ -246,9 +259,9 @@ function StockHealthBar({ health, total }: { health: StockHealth; total: number 
   );
 }
 
-function DaysOfCover({ days }: { days: number }) {
-  const color = days <= 3 ? STATUS.critical : days <= 7 ? STATUS.warning : null;
-  const text = days === 0 ? "Out" : days > 365 ? "1y+" : `${days} ${days === 1 ? "day" : "days"}`;
+function DaysOfCover({ days }: { days: number | null }) {
+  const color = days === null ? null : days <= 3 ? STATUS.critical : days <= 7 ? STATUS.warning : null;
+  const text = days === null ? "1y+" : days === 0 ? "Out" : `${days} ${days === 1 ? "day" : "days"}`;
   return (
     <span className="flex items-center gap-1.5 shrink-0 text-sm font-mono text-ink-100">
       {color && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />}

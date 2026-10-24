@@ -1,24 +1,15 @@
-import { Request, Router } from "express";
+import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { DAY_MS } from "../lib/stock";
-import {
-  FORECAST_DAYS,
-  capOutliers,
-  daysUntilEmpty,
-  forecastUsage,
-  median,
-  medianAbsoluteDeviation,
-  suggestedReorderPoint,
-} from "../lib/forecast";
+import { FORECAST_DAYS, capOutliers, median, medianAbsoluteDeviation, suggestedReorderPoint } from "../lib/forecast";
+import { HISTORY_DAYS, groupByItem, localDayCounter, outlook, usageHistory } from "../lib/usage";
 import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const analyticsRouter = Router();
 
 analyticsRouter.use(requireAuth, requireRole("ADMIN", "MANAGER"));
 
-// How much history the models learn from (26 weeks).
-const HISTORY_DAYS = 182;
 // The window unusual activity is reported for.
 const ANOMALY_WINDOW_DAYS = 30;
 // No usage for this long (with stock on the shelf) counts as dead stock.
@@ -34,30 +25,6 @@ const MIN_ISSUES_FOR_BASELINE = 5;
 const MAX_ANOMALIES = 50;
 const HISTORY_WEEKS = 8;
 
-/**
- * Turns timestamps into whole days in the reader's time zone (sent as ?tz=),
- * so "busy Saturdays" means Saturdays where the hotel is, not in UTC.
- */
-function localDays(req: Request) {
-  let format: Intl.DateTimeFormat;
-  try {
-    format = new Intl.DateTimeFormat("en-CA", {
-      timeZone: typeof req.query.tz === "string" ? req.query.tz : "UTC",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  } catch {
-    format = new Intl.DateTimeFormat("en-CA", { timeZone: "UTC", year: "numeric", month: "2-digit", day: "2-digit" });
-  }
-  /** A day number (days since 1970-01-01 in local time); its weekday is (n + 4) % 7, Sunday = 0. */
-  return (d: Date) => {
-    const [y, m, day] = format.format(d).split("-").map(Number);
-    return Math.round(Date.UTC(y, m - 1, day) / DAY_MS);
-  };
-}
-
-const weekdayOf = (dayNumber: number) => (((dayNumber + 4) % 7) + 7) % 7;
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 analyticsRouter.get(
@@ -67,7 +34,7 @@ analyticsRouter.get(
     const departmentId = resolveDepartmentScope(req);
     const itemScope = hotelId || departmentId ? { hotelId, departmentId } : undefined;
     const now = new Date();
-    const dayOf = localDays(req);
+    const dayOf = localDayCounter(req.query.tz);
     const today = dayOf(now);
     const historyStart = new Date(now.getTime() - (HISTORY_DAYS + 1) * DAY_MS);
 
@@ -132,14 +99,7 @@ analyticsRouter.get(
         ? { days: Math.max(1, round1(median(allLeadTimes))), measured: true, samples: allLeadTimes.length }
         : { days: ASSUMED_LEAD_TIME_DAYS, measured: false, samples: allLeadTimes.length };
 
-    // --- Daily usage per item, in local days, for the history window (ending yesterday).
-    const issuesByItem = new Map<string, typeof movements>();
-    for (const m of movements) {
-      if (m.type !== "ISSUE") continue;
-      const list = issuesByItem.get(m.itemId) ?? [];
-      list.push(m);
-      issuesByItem.set(m.itemId, list);
-    }
+    const issuesByItem = groupByItem(movements.filter((m) => m.type === "ISSUE"));
 
     const lastIssuedAt = new Map(lastIssues.map((row) => [row.itemId, row._max.createdAt]));
 
@@ -149,17 +109,10 @@ analyticsRouter.get(
     const longRunRate = new Map<string, number>();
 
     for (const item of items) {
-      // History starts when the item was added, so a new item isn't read as idle before it existed.
-      const firstDay = Math.max(today - HISTORY_DAYS, dayOf(item.createdAt));
-      const length = today - firstDay; // excludes today, which is still in progress
-      const usage = Array(Math.max(0, length)).fill(0);
-      const weekdays = usage.map((_, i) => weekdayOf(firstDay + i));
-      for (const issue of issuesByItem.get(item.id) ?? []) {
-        const index = dayOf(issue.createdAt) - firstDay;
-        if (index >= 0 && index < length) usage[index] += -issue.quantity;
-      }
+      const history = usageHistory(item, issuesByItem.get(item.id) ?? [], dayOf, today);
+      const { usage } = history;
       const totalUsed = usage.reduce((a, b) => a + b, 0);
-      longRunRate.set(item.id, length > 0 ? totalUsed / length : 0);
+      longRunRate.set(item.id, usage.length > 0 ? totalUsed / usage.length : 0);
 
       const ageDays = (now.getTime() - item.createdAt.getTime()) / DAY_MS;
       const last = lastIssuedAt.get(item.id) ?? null;
@@ -178,10 +131,9 @@ analyticsRouter.get(
         }
       }
 
-      if (totalUsed === 0) continue;
-
-      // --- Demand forecast.
-      const result = forecastUsage(usage, weekdays, weekdayOf(today));
+      // --- Demand forecast (the same one the Dashboard and Stock report use).
+      const result = outlook(history, item.quantityOnHand, today);
+      if (!result) continue;
       const next7 = result.daily.slice(0, 7).reduce((a, b) => a + b, 0);
       const next28 = result.daily.reduce((a, b) => a + b, 0);
       // Compared on capped usage, so one big event doesn't read as a trend.
@@ -197,7 +149,7 @@ analyticsRouter.get(
       }
       const weeklyForecast = [0, 1, 2, 3].map((w) => round1(result.daily.slice(w * 7, w * 7 + 7).reduce((a, b) => a + b, 0)));
 
-      const daysLeft = daysUntilEmpty(item.quantityOnHand, result.daily);
+      const { daysLeft } = result;
       forecasts.push({
         ...summary(item),
         next7: round1(next7),
@@ -219,7 +171,7 @@ analyticsRouter.get(
           itemLeadTimes.length >= MIN_LEAD_TIME_SAMPLES
             ? { days: Math.max(1, round1(median(itemLeadTimes))), measured: true, basis: "item" as const }
             : { days: scopeLeadTime.days, measured: scopeLeadTime.measured, basis: "department" as const };
-        const dailyRate = next28 / FORECAST_DAYS;
+        const { dailyRate } = result;
         const suggested = suggestedReorderPoint(dailyRate, result.dailyError, leadTime.days);
         const current = item.reorderPoint;
         const status =

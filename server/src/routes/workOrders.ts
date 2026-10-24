@@ -96,6 +96,22 @@ workOrdersRouter.patch(
     const departmentId = resolveDepartmentScope(req);
     if (departmentId && existing.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
 
+    // Staff can take an unassigned job for themselves, but handing work to
+    // someone else (or taking a colleague's) is for Managers and Admins.
+    if (req.user!.role === "STAFF" && parsed.data.assignedToUserId !== undefined) {
+      const self = req.user!.userId;
+      const takingFree = parsed.data.assignedToUserId === self && existing.assignedToUserId === null;
+      const unchanged = parsed.data.assignedToUserId === existing.assignedToUserId;
+      if (!takingFree && !unchanged) {
+        return res.status(403).json({
+          error:
+            existing.assignedToUserId && existing.assignedToUserId !== self
+              ? "Someone else has already taken this work order"
+              : "Staff can only assign unassigned work orders to themselves",
+        });
+      }
+    }
+
     if (await invalidAssignee(parsed.data.assignedToUserId, existing.hotelId, existing.departmentId)) {
       return res.status(400).json({ error: "The assignee must be an active user in this hotel and department" });
     }

@@ -119,17 +119,43 @@ export interface RunningOutItem {
   quantityOnHand: number;
   reorderPoint: number;
   dailyUsage: number;
-  daysOfCover: number;
+  /** null = lasts over a year at the forecast rate. */
+  daysOfCover: number | null;
 }
 
 export interface DashboardSummary {
-  usageWindowDays: number;
   itemCount: number;
   stockValue: { total: number; itemsWithCost: number };
   health: StockHealth;
   openWorkOrders: { total: number; stale: number; staleAfterDays: number };
   pendingPurchaseRequests: number;
   runningOut: RunningOutItem[];
+}
+
+export interface MyWorkOrder {
+  id: string;
+  title: string;
+  description: string | null;
+  status: WorkOrderStatus;
+  createdAt: string;
+  createdBy: { name: string };
+  hotel: { code: string };
+}
+
+export interface MyWork {
+  assigned: MyWorkOrder[];
+  upForGrabs: MyWorkOrder[];
+  completedThisWeek: number;
+  topItems: {
+    id: string;
+    name: string;
+    unit: string;
+    quantityOnHand: number;
+    reorderPoint: number;
+    status: "out" | "low" | "over" | "healthy";
+    issuedLast30Days: number;
+  }[];
+  recent: { id: string; type: TransactionType; quantity: number; createdAt: string; item: { name: string; unit: string } }[];
 }
 
 interface AnalyticsItem {
