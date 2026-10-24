@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { signToken } from "../lib/auth";
 import { audit } from "../lib/audit";
-import { isWeakPassword, passwordSchema } from "../lib/password";
+import { isPasswordExpired, isWeakPassword, passwordExpiresAt, passwordSchema } from "../lib/password";
 import { FailureLimiter } from "../lib/rateLimit";
 import { requireAuth } from "../middleware/auth";
 
@@ -36,7 +36,8 @@ function tooManyAttempts(res: Response, retryAfterSeconds: number) {
   });
 }
 
-function publicUser(user: {
+/** The signed-in user as the app sees it, from sign-in and from GET /me. */
+export function publicUser(user: {
   id: string;
   name: string;
   email: string;
@@ -44,9 +45,12 @@ function publicUser(user: {
   hotelId: string | null;
   departmentId: string | null;
   mustChangePassword: boolean;
+  passwordChangedAt: Date;
 }) {
   const { id, name, email, role, hotelId, departmentId, mustChangePassword } = user;
-  return { id, name, email, role, hotelId, departmentId, mustChangePassword };
+  // Lets the app remind the user before their password expires.
+  const passwordExpires = passwordExpiresAt(user.passwordChangedAt);
+  return { id, name, email, role, hotelId, departmentId, mustChangePassword, passwordExpiresAt: passwordExpires };
 }
 
 const loginSchema = z.object({
@@ -122,8 +126,10 @@ authRouter.post(
     }
 
     let mustChangePassword = user.mustChangePassword;
-    if (!mustChangePassword && isWeakPassword(password)) {
-      // Catches the seed's default admin password and any pre-policy weak one.
+    // Catches the seed's default admin password and any pre-policy weak one.
+    const weak = isWeakPassword(password);
+    const expired = isPasswordExpired(user.passwordChangedAt);
+    if (!mustChangePassword && (weak || expired)) {
       mustChangePassword = true;
       await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
     }
@@ -131,7 +137,9 @@ authRouter.post(
     await audit(req, {
       action: "auth.login",
       entityId: user.id,
-      summary: `${user.name} signed in${mustChangePassword ? " (password change required)" : ""}`,
+      summary: `${user.name} signed in${
+        expired ? " (password expired — change required)" : mustChangePassword ? " (password change required)" : ""
+      }`,
       actorUserId: user.id,
       hotelId: user.hotelId,
       departmentId: user.departmentId,
@@ -181,6 +189,7 @@ authRouter.post(
       data: {
         passwordHash: await bcrypt.hash(newPassword, 10),
         mustChangePassword: false,
+        passwordChangedAt: new Date(),
         tokenVersion: { increment: 1 },
       },
     });

@@ -1,4 +1,5 @@
 import { useAuth } from "../context/AuthContext";
+import { daysUntilPasswordExpires } from "../types";
 import { ChangePasswordForm } from "../components/ChangePasswordForm";
 import { Footer } from "../components/Footer";
 import zsHoldingsLogo from "../assets/logo-zsholdings.png";
@@ -18,7 +19,9 @@ export function ForcePasswordChange() {
             <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-14 w-auto mb-4" />
             <h1 className="text-lg font-semibold text-ink-100 leading-tight">Choose a new password</h1>
             <p className="text-sm text-ink-500 mt-1">
-              {user?.email} is using a temporary or easily guessed password. Set a new one to continue.
+              {daysUntilPasswordExpires(user) === 0
+                ? `The password for ${user?.email} has expired. Set a new one to continue.`
+                : `${user?.email} is using a temporary or easily guessed password. Set a new one to continue.`}
             </p>
           </div>
           <ChangePasswordForm submitLabel="Set password and continue" />

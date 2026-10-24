@@ -175,6 +175,7 @@ usersRouter.patch(
       // any session that knew the old one is signed out.
       data.passwordHash = await bcrypt.hash(password, 10);
       data.mustChangePassword = true;
+      data.passwordChangedAt = new Date();
       data.tokenVersion = { increment: 1 };
     }
 

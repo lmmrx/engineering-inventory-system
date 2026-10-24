@@ -4,7 +4,7 @@ import express, { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { analyticsRouter } from "./routes/analytics";
 import { auditLogsRouter } from "./routes/auditLogs";
-import { authRouter } from "./routes/auth";
+import { authRouter, publicUser } from "./routes/auth";
 import { categoriesRouter } from "./routes/categories";
 import { dashboardRouter } from "./routes/dashboard";
 import { exportRouter } from "./routes/export";
@@ -87,11 +87,8 @@ export function createApp() {
     "/me",
     requireAuth,
     asyncHandler(async (req, res) => {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user!.userId },
-        select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true, mustChangePassword: true },
-      });
-      res.json(user);
+      const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+      res.json(user ? publicUser(user) : null);
     })
   );
 
@@ -108,7 +105,6 @@ export function createApp() {
       const user = await prisma.user.update({
         where: { id: req.user!.userId },
         data: { name: parsed.data.name },
-        select: { id: true, name: true, email: true, role: true, hotelId: true, departmentId: true, mustChangePassword: true },
       });
       if (before && before.name !== user.name) {
         await audit(req, {
@@ -120,7 +116,7 @@ export function createApp() {
           departmentId: user.departmentId,
         });
       }
-      res.json(user);
+      res.json(publicUser(user));
     })
   );
 

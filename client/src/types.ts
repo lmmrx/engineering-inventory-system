@@ -8,6 +8,17 @@ export interface CurrentUser {
   hotelId: string | null;
   departmentId: string | null;
   mustChangePassword?: boolean;
+  /** When the current password expires; null when the server has expiry turned off. */
+  passwordExpiresAt?: string | null;
+}
+
+/** Start reminding people this many days before their password expires. */
+export const PASSWORD_REMINDER_DAYS = 14;
+
+/** Whole days until the password expires (0 = today or already), or null if it doesn't expire. */
+export function daysUntilPasswordExpires(user: CurrentUser | null) {
+  if (!user?.passwordExpiresAt) return null;
+  return Math.max(0, Math.ceil((new Date(user.passwordExpiresAt).getTime() - Date.now()) / 86_400_000));
 }
 
 /** Kept in step with the server's password policy (server/src/lib/password.ts). */

@@ -39,6 +39,7 @@ async function main() {
     data: {
       passwordHash: await bcrypt.hash(temporaryPassword, 10),
       mustChangePassword: true,
+      passwordChangedAt: new Date(),
       disabledAt: null,
       failedLoginCount: 0,
       lockedUntil: null,

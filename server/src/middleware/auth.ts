@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { AuthTokenPayload, Role, verifyToken } from "../lib/auth";
 import { prisma } from "../lib/prisma";
+import { isPasswordExpired } from "../lib/password";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -37,10 +38,25 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   try {
     const user = await prisma.user.findUnique({
       where: { id: claims.userId },
-      select: { id: true, role: true, hotelId: true, departmentId: true, disabledAt: true, tokenVersion: true, mustChangePassword: true },
+      select: {
+        id: true,
+        role: true,
+        hotelId: true,
+        departmentId: true,
+        disabledAt: true,
+        tokenVersion: true,
+        mustChangePassword: true,
+        passwordChangedAt: true,
+      },
     });
     if (!user || user.disabledAt || user.tokenVersion !== claims.tv) {
       return res.status(401).json({ error: "Your session has ended. Please sign in again." });
+    }
+
+    // A password that expires mid-session is caught on the next request, not just at sign-in.
+    if (!user.mustChangePassword && isPasswordExpired(user.passwordChangedAt)) {
+      await prisma.user.update({ where: { id: user.id }, data: { mustChangePassword: true } });
+      user.mustChangePassword = true;
     }
 
     req.user = { userId: user.id, role: user.role, hotelId: user.hotelId, departmentId: user.departmentId };

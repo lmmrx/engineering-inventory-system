@@ -35,7 +35,8 @@ export function ChangePasswordForm({ submitLabel = "Save password", onChanged }:
         newPassword,
       });
       setAuthToken(result.token);
-      updateUser({ mustChangePassword: false });
+      // Picks up the new expiry date too, which clears any reminder banner.
+      updateUser({ mustChangePassword: false, passwordExpiresAt: result.user.passwordExpiresAt });
       setSuccess(true);
       setCurrentPassword("");
       setNewPassword("");

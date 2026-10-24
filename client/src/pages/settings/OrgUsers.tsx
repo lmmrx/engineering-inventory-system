@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useDepartmentScope } from "../../context/DepartmentScopeContext";
 import { AppUser, Department, Hotel, MIN_PASSWORD_LENGTH, Role } from "../../types";
 import { Field, Modal, ModalActions } from "../../components/Modal";
-import { PasswordInput } from "../../components/PasswordInput";
+import { TemporaryPasswordField } from "../../components/TemporaryPasswordField";
 
 export function OrgUsers() {
   const { user: currentUser } = useAuth();
@@ -220,14 +220,13 @@ function CreateUserModal({
           />
         </Field>
         <Field label="Temporary password">
-          <PasswordInput
+          <TemporaryPasswordField
             required
-            minLength={MIN_PASSWORD_LENGTH}
-            placeholder={`At least ${MIN_PASSWORD_LENGTH} characters — they'll change it at first sign-in`}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input-field"
+            onChange={setPassword}
+            placeholder={`At least ${MIN_PASSWORD_LENGTH} characters, or Generate one`}
           />
+          <p className="text-xs text-ink-500 mt-1">They'll choose their own at first sign-in.</p>
         </Field>
 
         {isAdmin ? (
@@ -384,13 +383,16 @@ function EditUserModal({
         )}
 
         <Field label="Reset password (optional)">
-          <PasswordInput
-            minLength={MIN_PASSWORD_LENGTH}
-            placeholder="Leave blank to keep — they'll change a reset one at sign-in"
+          <TemporaryPasswordField
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="input-field"
+            onChange={setNewPassword}
+            placeholder="Leave blank to keep, or Generate one"
           />
+          {newPassword && (
+            <p className="text-xs text-ink-500 mt-1">
+              Saving signs them out everywhere; they'll choose their own password at next sign-in.
+            </p>
+          )}
         </Field>
 
         {errorMessage && <p className="text-sm text-rose-400">{errorMessage}</p>}

@@ -29,6 +29,28 @@ export function isWeakPassword(password: string) {
   return password.length < MIN_PASSWORD_LENGTH || isCommonPassword(password);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How long a password lasts before it must be changed. Set
+ * PASSWORD_MAX_AGE_DAYS on the server to change it, or to 0 to turn expiry off.
+ */
+export const PASSWORD_MAX_AGE_DAYS = (() => {
+  const raw = process.env.PASSWORD_MAX_AGE_DAYS?.trim();
+  const days = Number(raw);
+  return raw && Number.isFinite(days) && days >= 0 ? Math.floor(days) : 90;
+})();
+
+/** When a password set at `changedAt` expires, or null if expiry is turned off. */
+export function passwordExpiresAt(changedAt: Date): Date | null {
+  return PASSWORD_MAX_AGE_DAYS > 0 ? new Date(changedAt.getTime() + PASSWORD_MAX_AGE_DAYS * DAY_MS) : null;
+}
+
+export function isPasswordExpired(changedAt: Date, now = Date.now()) {
+  const expiresAt = passwordExpiresAt(changedAt);
+  return expiresAt !== null && expiresAt.getTime() <= now;
+}
+
 /** The rule every newly chosen password must pass. */
 export const passwordSchema = z
   .string()

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { Role } from "../types";
 import { Footer } from "./Footer";
+import { PasswordExpiryBanner } from "./PasswordExpiryBanner";
 import { UserMenu } from "./UserMenu";
 import zsHoldingsLogo from "../assets/logo-zsholdings.png";
 
@@ -231,6 +232,7 @@ export function Layout() {
 
       <div className={`flex min-h-screen flex-col transition-[padding] duration-200 ${collapsed ? "lg:pl-16" : "lg:pl-60"}`}>
         <main className="mx-auto max-w-[1600px] px-4 py-6 flex-1 w-full">
+          <PasswordExpiryBanner />
           <Outlet />
         </main>
         <Footer />
