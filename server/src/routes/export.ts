@@ -132,41 +132,16 @@ function byCategoryThenName(
   );
 }
 
-/** Current stock snapshot with valuation. */
-exportRouter.get(
-  "/inventory",
-  asyncHandler(async (req, res) => {
-    const { hotelId, departmentId } = scope(req);
-    const items = await prisma.inventoryItem.findMany({ where: { hotelId, departmentId }, include: itemInclude });
-    items.sort(byCategoryThenName);
+// Urgent rows first, so the top of the stock report doubles as the reorder list.
+const STATUS_ORDER: Record<StockStatus, number> = { out: 0, low: 1, healthy: 2, over: 3 };
 
-    sendCsv(
-      res,
-      [
-        "Hotel", "Group", "Subcategory", "Item", "SKU", "Unit", "On Hand", "Reorder Point", "Max Level",
-        "Status", "Unit Cost", "Total Value", "Location",
-      ],
-      items.map((i) => [
-        i.hotel.name,
-        ...categoryColumns(i.category),
-        i.name,
-        i.sku ?? "",
-        i.unit,
-        i.quantityOnHand,
-        i.reorderPoint,
-        i.maxLevel ?? "",
-        STATUS_LABEL[stockStatus(i)],
-        money(i.unitCost),
-        i.unitCost == null ? "" : money(Number(i.unitCost) * i.quantityOnHand),
-        i.location ?? "",
-      ])
-    );
-  })
-);
-
-/** Items at or below their reorder point, with how much to order. */
+/**
+ * Current stock for every item: valuation plus reorder planning. Items at or
+ * below their reorder point come first, most urgent first, with a suggested
+ * order quantity; filter Status in Excel to get just the reorder list.
+ */
 exportRouter.get(
-  "/reorder",
+  "/stock",
   asyncHandler(async (req, res) => {
     const { hotelId, departmentId, itemScope } = scope(req);
     const now = Date.now();
@@ -186,45 +161,51 @@ exportRouter.get(
     }
 
     const rows = items
-      .filter((i) => i.quantityOnHand <= i.reorderPoint)
       .map((i) => {
+        const status = stockStatus(i);
         const usage = dailyUsage(issuedQty.get(i.id) ?? 0, i.createdAt, now);
         const ordered = onOrder.get(i.id) ?? 0;
-        // Refill to the max level; without one, to twice the reorder point.
+        // Only items at or below their reorder point need ordering: refill to
+        // the max level, or without one, to twice the reorder point.
+        const needsOrder = i.quantityOnHand <= i.reorderPoint;
         const target = i.maxLevel ?? i.reorderPoint * 2;
-        const suggested = Math.max(0, target - i.quantityOnHand - ordered);
-        return { item: i, usage, ordered, suggested, daysOfCover: usage > 0 ? Math.floor(i.quantityOnHand / usage) : null };
+        const suggested = needsOrder ? Math.max(0, target - i.quantityOnHand - ordered) : 0;
+        const daysOfCover = usage > 0 ? Math.floor(i.quantityOnHand / usage) : null;
+        return { item: i, status, usage, ordered, suggested, daysOfCover };
       })
-      // Most urgent first; items with no recent usage sort after those running out.
+      // Out, then low, then the rest; within a status, fastest running out first.
       .sort(
         (a, b) =>
-          (a.daysOfCover ?? Infinity) - (b.daysOfCover ?? Infinity) || byCategoryThenName(a.item, b.item)
+          STATUS_ORDER[a.status] - STATUS_ORDER[b.status] ||
+          (a.daysOfCover ?? Infinity) - (b.daysOfCover ?? Infinity) ||
+          byCategoryThenName(a.item, b.item)
       );
 
     sendCsv(
       res,
       [
-        "Hotel", "Group", "Subcategory", "Item", "SKU", "Unit", "On Hand", "Reorder Point", "Max Level", "Status",
-        "Avg Daily Use (30d)", "Days of Cover", "On Open Purchase Requests", "Suggested Order Qty", "Unit Cost",
-        "Est. Order Cost", "Location",
+        "Hotel", "Group", "Subcategory", "Item", "SKU", "Unit", "Location", "On Hand", "Reorder Point", "Max Level",
+        "Status", "Avg Daily Use (30d)", "Days of Cover", "On Open Purchase Requests", "Suggested Order Qty",
+        "Unit Cost", "Stock Value", "Est. Order Cost",
       ],
-      rows.map(({ item: i, usage, ordered, suggested, daysOfCover }) => [
+      rows.map(({ item: i, status, usage, ordered, suggested, daysOfCover }) => [
         i.hotel.name,
         ...categoryColumns(i.category),
         i.name,
         i.sku ?? "",
         i.unit,
+        i.location ?? "",
         i.quantityOnHand,
         i.reorderPoint,
         i.maxLevel ?? "",
-        STATUS_LABEL[stockStatus(i)],
+        STATUS_LABEL[status],
         Math.round(usage * 10) / 10,
         daysOfCover ?? "",
         ordered,
         suggested,
         money(i.unitCost),
-        i.unitCost == null ? "" : money(Number(i.unitCost) * suggested),
-        i.location ?? "",
+        i.unitCost == null ? "" : money(Number(i.unitCost) * i.quantityOnHand),
+        i.unitCost == null || suggested === 0 ? "" : money(Number(i.unitCost) * suggested),
       ])
     );
   })
@@ -308,14 +289,9 @@ exportRouter.get(
     if (!period) return;
     const { itemScope } = scope(req);
     const fmt = dateFormatter(req);
-    const type = req.query.type;
 
     const transactions = await prisma.stockTransaction.findMany({
-      where: {
-        item: itemScope,
-        createdAt: { gte: period.from, lte: period.to },
-        type: typeof type === "string" && type in TYPE_LABEL ? (type as TransactionType) : undefined,
-      },
+      where: { item: itemScope, createdAt: { gte: period.from, lte: period.to } },
       include: { item: { include: itemInclude }, performedBy: true, workOrder: true },
       orderBy: { createdAt: "desc" },
       take: MAX_ROWS,
