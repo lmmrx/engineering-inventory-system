@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { api } from "../../api/client";
+import { ReportViewer } from "../../components/ReportViewer";
 import { ALL_HOTELS, useHotelScope } from "../../context/HotelScopeContext";
 import { useDepartmentScope } from "../../context/DepartmentScopeContext";
 import { PeriodPicker, toInputDate, usePeriod } from "../../components/PeriodPicker";
@@ -56,30 +57,40 @@ export function DataExport() {
   const [error, setError] = useState<string | null>(null);
   const periodState = usePeriod();
   const { period, invalid: periodInvalid } = periodState;
+  const [viewing, setViewing] = useState<{ report: Report; path: string; label: string } | null>(null);
+  const closeViewer = useCallback(() => setViewing(null), []);
 
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
   const hotel = hotels.find((h) => h.id === selectedHotelId);
   const department = departments.find((d) => d.id === selectedDepartmentId);
 
+  /** The report's URL for the current hotel, department and date range — shared by the viewer and the download. */
+  function reportPath(report: Report) {
+    const params = new URLSearchParams({
+      departmentId: selectedDepartmentId,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
+    if (report.usesPeriod) {
+      params.set("from", period.from.toISOString());
+      params.set("to", period.to.toISOString());
+    }
+    return `/export/${report.kind}?${params}`;
+  }
+
+  function periodLabel(report: Report) {
+    return report.usesPeriod ? `${toInputDate(period.from)} to ${toInputDate(period.to)}` : `as of ${toInputDate(new Date())}`;
+  }
+
   async function handleDownload(report: Report) {
     setError(null);
     setDownloading(report.kind);
     try {
-      const params = new URLSearchParams({
-        departmentId: selectedDepartmentId,
-        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
-      if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
-      if (report.usesPeriod) {
-        params.set("from", period.from.toISOString());
-        params.set("to", period.to.toISOString());
-      }
-
       const scopeName = [department?.code, viewingAllHotels ? "ALL-HOTELS" : hotel?.code].filter(Boolean).join("_");
       const dateName = report.usesPeriod
         ? `${toInputDate(period.from)}_to_${toInputDate(period.to)}`
         : toInputDate(new Date());
-      await api.download(`/export/${report.kind}?${params}`, `${report.kind}_${scopeName}_${dateName}.csv`);
+      await api.download(reportPath(report), `${report.kind}_${scopeName}_${dateName}.csv`);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "Could not generate the export. Try again in a moment.");
     } finally {
@@ -116,13 +127,26 @@ export function DataExport() {
                 </p>
                 <p className="text-xs text-ink-500">{report.description}</p>
               </div>
-              <button
-                onClick={() => handleDownload(report)}
-                disabled={busy || (report.usesPeriod && periodInvalid)}
-                className="btn-ghost text-xs px-2.5 py-1.5 self-start sm:self-center"
-              >
-                {busy ? "Preparing..." : "Download CSV"}
-              </button>
+              <div className="flex gap-2 self-start sm:self-center flex-none">
+                <button
+                  onClick={() => {
+                    setError(null);
+                    // Freezes the URL, so changing the date range behind the viewer doesn't change what it shows.
+                    setViewing({ report, path: reportPath(report), label: periodLabel(report) });
+                  }}
+                  disabled={report.usesPeriod && periodInvalid}
+                  className="btn-ghost text-xs px-2.5 py-1.5"
+                >
+                  View
+                </button>
+                <button
+                  onClick={() => handleDownload(report)}
+                  disabled={busy || (report.usesPeriod && periodInvalid)}
+                  className="btn-ghost text-xs px-2.5 py-1.5"
+                >
+                  {busy ? "Preparing..." : "Download CSV"}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -131,6 +155,20 @@ export function DataExport() {
       <p className="text-xs text-ink-500 mt-4">The audit log is exported from its own page, Settings → Audit log.</p>
 
       {error && <p className="text-sm text-rose-400 mt-4">{error}</p>}
+
+      {viewing && (
+        <ReportViewer
+          title={viewing.report.title}
+          subtitle={`${department?.name ?? "Your department"} · ${
+            viewingAllHotels ? "All hotels" : hotel?.name ?? "your hotel"
+          } · ${viewing.label}`}
+          path={viewing.path}
+          onDownload={() => handleDownload(viewing.report)}
+          downloading={downloading === viewing.report.kind}
+          downloadError={error}
+          onClose={closeViewer}
+        />
+      )}
     </div>
   );
 }

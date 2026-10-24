@@ -36,7 +36,15 @@ function csvCell(value: unknown): string {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function sendCsv(res: Response, header: string[], rows: unknown[][]) {
+/**
+ * Sends a report as a CSV download, or with ?format=json as { header, rows }
+ * for the in-app viewer, so the viewer always shows exactly what the file holds.
+ */
+function sendReport(req: Request, res: Response, header: string[], rows: unknown[][]) {
+  if (req.query.format === "json") {
+    res.json({ header, rows });
+    return;
+  }
   // The byte-order mark makes Excel read the file as UTF-8 instead of mangling
   // accented names; CRLF is what Excel expects between rows.
   const csv = "﻿" + [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
@@ -181,7 +189,8 @@ exportRouter.get(
           byCategoryThenName(a.item, b.item)
       );
 
-    sendCsv(
+    sendReport(
+      req,
       res,
       [
         "Hotel", "Group", "Subcategory", "Item", "SKU", "Unit", "Location", "On Hand", "Reorder Point", "Max Level",
@@ -250,7 +259,8 @@ exportRouter.get(
     const changedSince = new Map(afterPeriod.map((row) => [row.itemId, row._sum.quantity ?? 0]));
     const periodDays = Math.max(1, Math.ceil((period.to.getTime() - period.from.getTime()) / DAY_MS));
 
-    sendCsv(
+    sendReport(
+      req,
       res,
       [
         "Hotel", "Group", "Subcategory", "Item", "SKU", "Unit", "Opening", "Received", "Issued", "Adjusted",
@@ -297,7 +307,8 @@ exportRouter.get(
       take: MAX_ROWS,
     });
 
-    sendCsv(
+    sendReport(
+      req,
       res,
       [
         "Date", "Hotel", "Group", "Subcategory", "Item", "SKU", "Type", "Quantity", "Unit", "Unit Cost", "Value",
@@ -346,7 +357,8 @@ exportRouter.get(
       take: MAX_ROWS,
     });
 
-    sendCsv(
+    sendReport(
+      req,
       res,
       [
         "Work Order", "Created", "Hotel", "Title", "Status", "Created By", "Assigned To", "Completed",
@@ -394,7 +406,8 @@ exportRouter.get(
 
     const statusLabel = { PENDING: "Pending", APPROVED: "Approved", REJECTED: "Rejected", RECEIVED: "Received" };
 
-    sendCsv(
+    sendReport(
+      req,
       res,
       [
         "Purchase Request", "Date", "Hotel", "Status", "Requested By", "Approved/Rejected By", "Decided At",
@@ -445,7 +458,8 @@ exportRouter.get(
       take: MAX_ROWS,
     });
 
-    sendCsv(
+    sendReport(
+      req,
       res,
       ["Date", "User", "User Email", "Action", "Record Type", "Record ID", "Summary", "Changes", "IP Address"],
       entries.map((e) => [
