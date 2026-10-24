@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { settingsGroupsForRole } from "./settingsNav";
 
@@ -12,14 +12,34 @@ export function SettingsIndex() {
 
 export function SettingsLayout() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   if (!user) return null;
   const groups = settingsGroupsForRole(user.role);
 
   return (
     <div>
       <h1 className="text-lg font-semibold text-ink-100 mb-4">Settings</h1>
+      {/* Phones: one dropdown instead of the full list, so the page content isn't pushed far down. */}
+      <select
+        value={location.pathname}
+        onChange={(e) => navigate(e.target.value)}
+        className="input-field md:hidden mb-4"
+        aria-label="Settings page"
+      >
+        {groups.map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.items.map((item) => (
+              <option key={item.to} value={`/settings/${item.to}`}>
+                {item.label}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+
       <div className="grid gap-6 md:grid-cols-[200px_1fr] items-start">
-        <nav className="space-y-5">
+        <nav className="space-y-5 hidden md:block">
           {groups.map((group) => (
             <div key={group.label}>
               <p className="px-2.5 text-xs font-semibold uppercase tracking-wide text-ink-600 mb-1">

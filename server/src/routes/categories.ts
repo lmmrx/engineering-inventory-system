@@ -16,11 +16,15 @@ categoriesRouter.get(
     // regardless of what departmentId they pass in the query string.
     const requested = typeof req.query.departmentId === "string" ? req.query.departmentId : undefined;
     const departmentId = req.user!.role === "ADMIN" ? requested : req.user!.departmentId ?? NO_SCOPE;
+    // Item counts show which categories are in use (and so can't be deleted).
+    // Managers and Staff only count items at their own hotel.
+    const itemsCounted = req.user!.role === "ADMIN" ? true : { where: { hotelId: req.user!.hotelId ?? NO_SCOPE } };
     const categories = await prisma.category.findMany({
       where: { departmentId },
       orderBy: { name: "asc" },
+      include: { _count: { select: { items: itemsCounted } } },
     });
-    res.json(categories);
+    res.json(categories.map(({ _count, ...category }) => ({ ...category, itemCount: _count.items })));
   })
 );
 
