@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DAY_MS } from "./stock";
 
 export const MIN_PASSWORD_LENGTH = 10;
 // bcrypt silently ignores everything past 72 bytes, so longer input would give
@@ -29,7 +30,6 @@ export function isWeakPassword(password: string) {
   return password.length < MIN_PASSWORD_LENGTH || isCommonPassword(password);
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How long a password lasts before it must be changed. Set

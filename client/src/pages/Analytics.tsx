@@ -1,14 +1,11 @@
-import { ReactNode, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
-import { useDepartmentScope } from "../context/DepartmentScopeContext";
+import { timeZone, useScope } from "../hooks/useScope";
+import { EmptyState, STATUS_COLORS, Section, StatTile, StatusDot } from "../components/ui";
 import { Spinner } from "../components/Spinner";
 import { useLocale, useT } from "../i18n";
 import { Analytics as AnalyticsData, IdleStock, ItemForecast, ReorderPointAdvice, UsageAnomaly } from "../types";
-
-// Same reserved status colors as the dashboard; always paired with a text label.
-const STATUS = { critical: "#d03b3b", warning: "#fab219" };
 
 const RUN_OUT_SOON_DAYS = 14;
 const COLLAPSED_ROWS = 10;
@@ -30,21 +27,11 @@ function useFormats() {
 export function Analytics() {
   const t = useT();
   const { money } = useFormats();
-  const { selectedHotelId } = useHotelScope();
-  const { selectedDepartmentId } = useDepartmentScope();
-  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
-  const ready = !!selectedHotelId && !!selectedDepartmentId;
+  const { selectedHotelId, selectedDepartmentId, viewingAllHotels, ready, params } = useScope();
 
   const query = useQuery({
     queryKey: ["analytics", selectedHotelId, selectedDepartmentId],
-    queryFn: () => {
-      const params = new URLSearchParams({
-        departmentId: selectedDepartmentId,
-        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      });
-      if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
-      return api.get<AnalyticsData>(`/analytics?${params}`);
-    },
+    queryFn: () => api.get<AnalyticsData>(`/analytics?${params({ tz: timeZone() })}`),
     enabled: ready,
   });
 
@@ -75,25 +62,25 @@ export function Analytics() {
       </div>
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <Tile
+        <StatTile
           label={t("an.tileRunOut", { days: RUN_OUT_SOON_DAYS })}
           value={runningOutSoon}
           detail={t("an.tileRunOutHint")}
           href="#forecast"
         />
-        <Tile
+        <StatTile
           label={t("an.tileReorder")}
           value={data.reorderPoints.length}
           detail={t("an.tooLowHigh", { low: reorderTooLow, high: data.reorderPoints.length - reorderTooLow })}
           href="#reorder"
         />
-        <Tile
+        <StatTile
           label={t("an.unusual")}
           value={data.anomalies.length}
           detail={t("an.lastDays", { days: data.settings.anomalyWindowDays })}
           href="#unusual"
         />
-        <Tile
+        <StatTile
           label={t("an.tileIdle")}
           value={money.format(data.deadStockValue)}
           detail={t("an.idleCount", { count: data.deadStock.length })}
@@ -106,36 +93,6 @@ export function Analytics() {
       <AnomalySection data={data} showHotel={viewingAllHotels} />
       <IdleSection data={data} showHotel={viewingAllHotels} />
     </div>
-  );
-}
-
-function Tile({ label, value, detail, href }: { label: string; value: ReactNode; detail: string; href: string }) {
-  return (
-    <a href={href} className="card p-4 block hover:border-navy-700 transition">
-      <p className="text-xs text-ink-500">{label}</p>
-      <p className="text-2xl font-semibold text-ink-100 mt-1 tabular-nums">{value}</p>
-      <p className="text-xs text-ink-500 mt-1">{detail}</p>
-    </a>
-  );
-}
-
-function Section({
-  id,
-  title,
-  description,
-  children,
-}: {
-  id: string;
-  title: string;
-  description: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section id={id} className="card p-4 scroll-mt-20">
-      <h2 className="font-semibold text-ink-100">{title}</h2>
-      <p className="text-xs text-ink-500 mb-3">{description}</p>
-      {children}
-    </section>
   );
 }
 
@@ -162,10 +119,6 @@ function ItemName({ name, hotelCode, showHotel }: { name: string; hotelCode: str
   );
 }
 
-function Empty({ children }: { children: ReactNode }) {
-  return <p className="text-sm text-ink-500">{children}</p>;
-}
-
 const th = "px-3 py-2 font-medium whitespace-nowrap";
 const td = "px-3 py-2 align-middle";
 
@@ -179,10 +132,10 @@ function ForecastSection({ data, showHotel }: { data: AnalyticsData; showHotel: 
     <Section
       id="forecast"
       title={t("an.forecast")}
-      description={t("an.forecastHint", { weeks: data.forecastDays / 7 })}
+      subtitle={t("an.forecastHint", { weeks: data.forecastDays / 7 })}
     >
       {data.forecasts.length === 0 ? (
-        <Empty>{t("an.forecastEmpty")}</Empty>
+        <EmptyState>{t("an.forecastEmpty")}</EmptyState>
       ) : (
         <>
           <div className="overflow-x-auto -mx-4">
@@ -247,10 +200,10 @@ function RunsOut({ forecast }: { forecast: ItemForecast }) {
   const { shortDate } = useFormats();
   const { daysLeft, runOutDate } = forecast;
   if (daysLeft === null || !runOutDate) return <span className="text-xs text-ink-500">{t("an.overYear")}</span>;
-  const color = daysLeft <= 3 ? STATUS.critical : daysLeft <= RUN_OUT_SOON_DAYS ? STATUS.warning : null;
+  const color = daysLeft <= 3 ? STATUS_COLORS.critical : daysLeft <= RUN_OUT_SOON_DAYS ? STATUS_COLORS.warning : null;
   return (
     <span className="flex items-center gap-1.5 text-ink-100">
-      {color && <span className="h-2 w-2 rounded-full flex-none" style={{ backgroundColor: color }} aria-hidden="true" />}
+      {color && <StatusDot color={color} />}
       <span>
         {daysLeft === 0 ? t("an.today") : shortDate.format(new Date(runOutDate))}
         <span className="text-xs text-ink-500"> · {daysLeft === 0 ? t("an.now") : t("an.daysShort", { count: daysLeft })}</span>
@@ -286,8 +239,9 @@ function Sparkline({ forecast }: { forecast: ItemForecast }) {
 
   return (
     <svg
-      width={width}
-      height={height}
+      // In rem, so the chart grows with the font-size setting; the viewBox keeps the drawing in proportion.
+      width={`${width / 16}rem`}
+      height={`${height / 16}rem`}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label={t("an.sparkAria", {
@@ -339,7 +293,7 @@ function ReorderSection({ data, showHotel }: { data: AnalyticsData; showHotel: b
     <Section
       id="reorder"
       title={t("an.reorder")}
-      description={
+      subtitle={
         <>
           {t("an.reorderHint")}{" "}
           {lead.measured
@@ -349,7 +303,7 @@ function ReorderSection({ data, showHotel }: { data: AnalyticsData; showHotel: b
       }
     >
       {data.reorderPoints.length === 0 ? (
-        <Empty>{t("an.reorderEmpty")}</Empty>
+        <EmptyState>{t("an.reorderEmpty")}</EmptyState>
       ) : (
         <>
           <div className="overflow-x-auto -mx-4">
@@ -391,7 +345,7 @@ function ReorderRow({ advice: r, showHotel }: { advice: ReorderPointAdvice; show
       <td className={`${td} whitespace-nowrap`}>
         {r.status === "too_low" ? (
           <span className="flex items-center gap-1.5 text-ink-100">
-            <span className="h-2 w-2 rounded-full flex-none" style={{ backgroundColor: STATUS.warning }} aria-hidden="true" />
+            <StatusDot color={STATUS_COLORS.warning} />
             {t("an.tooLow")}
           </span>
         ) : (
@@ -418,9 +372,9 @@ function AnomalySection({ data, showHotel }: { data: AnalyticsData; showHotel: b
   const t = useT();
   const { visible, toggle } = useCollapsed(data.anomalies);
   return (
-    <Section id="unusual" title={t("an.unusual")} description={t("an.unusualHint", { days: data.settings.anomalyWindowDays })}>
+    <Section id="unusual" title={t("an.unusual")} subtitle={t("an.unusualHint", { days: data.settings.anomalyWindowDays })}>
       {data.anomalies.length === 0 ? (
-        <Empty>{t("an.unusualEmpty")}</Empty>
+        <EmptyState>{t("an.unusualEmpty")}</EmptyState>
       ) : (
         <>
           <ul className="divide-y divide-navy-800">
@@ -468,13 +422,13 @@ function IdleSection({ data, showHotel }: { data: AnalyticsData; showHotel: bool
     <Section
       id="idle"
       title={t("an.idle")}
-      description={t("an.idleHint", {
+      subtitle={t("an.idleHint", {
         days: data.settings.deadAfterDays,
         months: Math.round(data.settings.slowCoverDays / 30),
       })}
     >
       {data.deadStock.length === 0 ? (
-        <Empty>{t("an.idleEmpty")}</Empty>
+        <EmptyState>{t("an.idleEmpty")}</EmptyState>
       ) : (
         <>
           <div className="overflow-x-auto -mx-4">

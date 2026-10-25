@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { passwordExpiresAt } from "./password";
 import { readPreferences } from "./preferences";
+import { effectivePermissions } from "./permissions";
 
 const include = {
   manager: { select: { id: true, name: true } },
@@ -19,6 +20,8 @@ export async function loadPublicUser(id: string) {
     name: user.name,
     email: user.email,
     role: user.role,
+    // What the app should show: the role's features plus any granted extras.
+    permissions: effectivePermissions(user.role, user.extraPermissions),
     hotelId: user.hotelId,
     departmentId: user.departmentId,
     mustChangePassword: user.mustChangePassword,

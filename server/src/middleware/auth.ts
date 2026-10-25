@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { AuthTokenPayload, Role, verifyToken } from "../lib/auth";
 import { prisma } from "../lib/prisma";
 import { isPasswordExpired } from "../lib/password";
+import { Permission, effectivePermissions } from "../lib/permissions";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -47,6 +48,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
         tokenVersion: true,
         mustChangePassword: true,
         passwordChangedAt: true,
+        extraPermissions: true,
       },
     });
     if (!user || user.disabledAt || user.tokenVersion !== claims.tv) {
@@ -59,7 +61,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       user.mustChangePassword = true;
     }
 
-    req.user = { userId: user.id, role: user.role, hotelId: user.hotelId, departmentId: user.departmentId };
+    req.user = {
+      userId: user.id,
+      role: user.role,
+      hotelId: user.hotelId,
+      departmentId: user.departmentId,
+      permissions: effectivePermissions(user.role, user.extraPermissions),
+    };
 
     const route = `${req.method} ${req.originalUrl.split("?")[0]}`;
     if (user.mustChangePassword && !ALLOWED_DURING_PASSWORD_CHANGE.has(route)) {
@@ -76,6 +84,16 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
  * department is scoped to this, so it sees nothing rather than everything.
  */
 export const NO_SCOPE = "__none__";
+
+/** Lets the request through only if the user has the feature, from their role or granted to them. */
+export function requirePermission(permission: Permission) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user || !req.user.permissions.includes(permission)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+    next();
+  };
+}
 
 export function requireRole(...roles: Role[]) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -97,6 +115,17 @@ export function resolveHotelScope(req: Request): string | undefined {
     return typeof q === "string" ? q : undefined;
   }
   return req.user!.hotelId ?? NO_SCOPE;
+}
+
+/**
+ * Whether a record lies outside what this request may touch: outside the
+ * user's own hotel and department, or (for an Admin) outside the hotel or
+ * department they picked with ?hotelId= / ?departmentId=.
+ */
+export function outOfScope(req: Request, record: { hotelId: string | null; departmentId: string | null }) {
+  const hotelId = resolveHotelScope(req);
+  const departmentId = resolveDepartmentScope(req);
+  return (!!hotelId && record.hotelId !== hotelId) || (!!departmentId && record.departmentId !== departmentId);
 }
 
 /**

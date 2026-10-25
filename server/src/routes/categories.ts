@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { audit, created, diff } from "../lib/audit";
-import { NO_SCOPE, requireAuth, requireRole } from "../middleware/auth";
+import { NO_SCOPE, requireAuth, requirePermission } from "../middleware/auth";
 
 export const categoriesRouter = Router();
 
@@ -29,9 +29,9 @@ categoriesRouter.get(
 );
 
 const upsertSchema = z.object({
-  name: z.string().min(1),
-  departmentId: z.string().min(1),
-  parentId: z.string().nullable().optional(),
+  name: z.string().trim().max(200).min(1),
+  departmentId: z.string().max(64).min(1),
+  parentId: z.string().max(64).nullable().optional(),
 });
 
 async function validateParent(parentId: string | null | undefined, departmentId: string, ownId?: string) {
@@ -49,13 +49,13 @@ async function validateParent(parentId: string | null | undefined, departmentId:
 
 categoriesRouter.post(
   "/",
-  requireRole("ADMIN", "MANAGER"),
+  requirePermission("manage_categories"),
   asyncHandler(async (req, res) => {
     const parsed = upsertSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    if (req.user!.role === "MANAGER" && parsed.data.departmentId !== req.user!.departmentId) {
-      return res.status(403).json({ error: "Managers may only manage categories in their own department" });
+    if (req.user!.role !== "ADMIN" && parsed.data.departmentId !== req.user!.departmentId) {
+      return res.status(403).json({ error: "You can only manage categories in your own department" });
     }
 
     const existing = await prisma.category.findUnique({
@@ -82,7 +82,7 @@ categoriesRouter.post(
 
 categoriesRouter.patch(
   "/:id",
-  requireRole("ADMIN", "MANAGER"),
+  requirePermission("manage_categories"),
   asyncHandler(async (req, res) => {
     // A category stays in its department: moving it would leave its items and
     // subcategories filed under a category from another department.
@@ -92,7 +92,7 @@ categoriesRouter.patch(
     const existing = await prisma.category.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Category not found" });
 
-    if (req.user!.role === "MANAGER" && existing.departmentId !== req.user!.departmentId) {
+    if (req.user!.role !== "ADMIN" && existing.departmentId !== req.user!.departmentId) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
@@ -131,7 +131,7 @@ categoriesRouter.patch(
 
 categoriesRouter.delete(
   "/:id",
-  requireRole("ADMIN", "MANAGER"),
+  requirePermission("manage_categories"),
   asyncHandler(async (req, res) => {
     const existing = await prisma.category.findUnique({
       where: { id: req.params.id },
@@ -139,7 +139,7 @@ categoriesRouter.delete(
     });
     if (!existing) return res.status(404).json({ error: "Category not found" });
 
-    if (req.user!.role === "MANAGER" && existing.departmentId !== req.user!.departmentId) {
+    if (req.user!.role !== "ADMIN" && existing.departmentId !== req.user!.departmentId) {
       return res.status(403).json({ error: "Forbidden" });
     }
 

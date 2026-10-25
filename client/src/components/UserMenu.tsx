@@ -8,7 +8,7 @@ import { useDepartmentScope } from "../context/DepartmentScopeContext";
 
 function ChevronRight() {
   return (
-    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="rtl:-scale-x-100">
+    <svg width="0.75rem" height="0.75rem" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="rtl:-scale-x-100">
       <path d="M7.5 4.5 13 10l-5.5 5.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -16,7 +16,7 @@ function ChevronRight() {
 
 function ChevronLeft() {
   return (
-    <svg width="12" height="12" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="rtl:-scale-x-100">
+    <svg width="0.75rem" height="0.75rem" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="rtl:-scale-x-100">
       <path d="M12.5 4.5 7 10l5.5 5.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -24,7 +24,7 @@ function ChevronLeft() {
 
 function ChevronUpDown() {
   return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="flex-none text-ink-500">
+    <svg width="0.875rem" height="0.875rem" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="flex-none text-ink-500">
       <path d="M6.5 8 10 4.5 13.5 8M6.5 12 10 15.5 13.5 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -32,7 +32,7 @@ function ChevronUpDown() {
 
 function CheckIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="flex-none">
+    <svg width="0.875rem" height="0.875rem" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="flex-none">
       <path d="M4 10.5 8 14.5 16 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

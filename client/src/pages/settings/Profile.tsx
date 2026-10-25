@@ -1,10 +1,10 @@
 import { ChangeEvent, FormEvent, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { Avatar } from "../../components/Avatar";
 import { useAuth } from "../../context/AuthContext";
 import { useT } from "../../i18n";
-import { CurrentUser, ManagerOption } from "../../types";
+import { CurrentUser } from "../../types";
 
 const PHOTO_SIZE = 256;
 
@@ -50,18 +50,12 @@ export function ProfileSettings() {
   const [name, setName] = useState(user?.name ?? "");
   const [position, setPosition] = useState(user?.position ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
-  const [managerId, setManagerId] = useState(user?.manager?.id ?? "");
   const [saved, setSaved] = useState(false);
   const [photoError, setPhotoError] = useState(false);
 
-  const managersQuery = useQuery({
-    queryKey: ["manager-options"],
-    queryFn: () => api.get<ManagerOption[]>("/me/manager-options"),
-  });
-
   const mutation = useMutation({
     mutationFn: () =>
-      api.patch<CurrentUser>("/me", { name, position, phone, managerId: managerId || null }),
+      api.patch<CurrentUser>("/me", { name, position, phone }),
     onSuccess: (updated) => {
       updateUser(updated);
       setSaved(true);
@@ -94,12 +88,6 @@ export function ProfileSettings() {
 
   if (!user) return null;
 
-  // Keep a current manager selectable even if they'd no longer be offered (e.g. moved hotels).
-  const options = managersQuery.data ?? [];
-  const managerChoices =
-    user.manager && !options.some((m) => m.id === user.manager!.id)
-      ? [{ id: user.manager.id, name: user.manager.name, role: "MANAGER" as const, position: null }, ...options]
-      : options;
   const photoServerError = photoMutation.error instanceof Error ? photoMutation.error.message : null;
 
   return (
@@ -172,18 +160,12 @@ export function ProfileSettings() {
           />
         </label>
 
-        <label className="block">
+        {/* Set by whoever manages the account, so it's shown here but not editable. */}
+        <div>
           <span className="label-field">{t("profile.manager")}</span>
-          <select value={managerId} onChange={(e) => setManagerId(e.target.value)} className="input-field">
-            <option value="">{t("profile.noManager")}</option>
-            {managerChoices.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} — {m.position || t(`roleName.${m.role}`)}
-              </option>
-            ))}
-          </select>
-          <span className="block text-xs text-ink-500 mt-1">{t("profile.managerHint")}</span>
-        </label>
+          <p className="text-sm text-ink-200">{user.manager?.name ?? t("profile.noManager")}</p>
+          <span className="block text-xs text-ink-500 mt-0.5">{t("profile.managerHint")}</span>
+        </div>
 
         <label className="block">
           <span className="label-field">{t("profile.email")}</span>

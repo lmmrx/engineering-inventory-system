@@ -2,8 +2,8 @@ import { Request, Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
-import { audit, created, diff, recordRef } from "../lib/audit";
-import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
+import { audit, recordRef } from "../lib/audit";
+import { outOfScope, requireAuth, requirePermission, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const purchaseRequestsRouter = Router();
 
@@ -29,18 +29,20 @@ purchaseRequestsRouter.get(
 );
 
 const createSchema = z.object({
-  hotelId: z.string().min(1),
-  departmentId: z.string().min(1),
-  notes: z.string().optional(),
+  hotelId: z.string().max(64).min(1),
+  departmentId: z.string().max(64).min(1),
+  notes: z.string().trim().max(2000).optional(),
   items: z
     .array(
       z.object({
-        itemId: z.string().min(1),
-        quantityRequested: z.number().int().positive(),
-        estimatedCost: z.number().min(0).optional(),
+        itemId: z.string().max(64).min(1),
+        quantityRequested: z.number().int().positive().max(1_000_000),
+        // The column holds up to 99,999,999.99.
+        estimatedCost: z.number().min(0).max(10_000_000).optional(),
       })
     )
-    .min(1),
+    .min(1)
+    .max(100),
 });
 
 purchaseRequestsRouter.post(
@@ -49,21 +51,15 @@ purchaseRequestsRouter.post(
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const hotelId = resolveHotelScope(req);
-    if (hotelId && parsed.data.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
+    if (outOfScope(req, parsed.data)) return res.status(403).json({ error: "Forbidden" });
 
-    const departmentId = resolveDepartmentScope(req);
-    if (departmentId && parsed.data.departmentId !== departmentId) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
-
-    const items = await prisma.inventoryItem.findMany({
-      where: { id: { in: parsed.data.items.map((i) => i.itemId) } },
-    });
+    // The same item may appear on more than one line, so compare distinct ids.
+    const itemIds = [...new Set(parsed.data.items.map((i) => i.itemId))];
+    const items = await prisma.inventoryItem.findMany({ where: { id: { in: itemIds } } });
     const invalid = items.find(
       (i) => i.hotelId !== parsed.data.hotelId || i.departmentId !== parsed.data.departmentId
     );
-    if (items.length !== parsed.data.items.length || invalid) {
+    if (items.length !== itemIds.length || invalid) {
       return res.status(400).json({ error: "One or more items do not belong to this hotel and department" });
     }
 
@@ -92,10 +88,7 @@ purchaseRequestsRouter.post(
 async function loadInScope(req: Request, id: string) {
   const purchaseRequest = await prisma.purchaseRequest.findUnique({ where: { id } });
   if (!purchaseRequest) return { error: 404 as const };
-  const hotelId = resolveHotelScope(req);
-  if (hotelId && purchaseRequest.hotelId !== hotelId) return { error: 403 as const };
-  const departmentId = resolveDepartmentScope(req);
-  if (departmentId && purchaseRequest.departmentId !== departmentId) return { error: 403 as const };
+  if (outOfScope(req, purchaseRequest)) return { error: 403 as const };
   return { purchaseRequest };
 }
 
@@ -114,11 +107,15 @@ async function decide(id: string, status: "APPROVED" | "REJECTED", userId: strin
 
 purchaseRequestsRouter.patch(
   "/:id/approve",
-  requireRole("ADMIN", "MANAGER"),
+  requirePermission("approve_requests"),
   asyncHandler(async (req, res) => {
     const result = await loadInScope(req, req.params.id);
     if (result.error === 404) return res.status(404).json({ error: "Purchase request not found" });
     if (result.error === 403) return res.status(403).json({ error: "Forbidden" });
+    // Someone else has to approve a request — except an Admin, the last resort.
+    if (result.purchaseRequest!.requestedByUserId === req.user!.userId && req.user!.role !== "ADMIN") {
+      return res.status(403).json({ error: "You can't approve your own purchase request — ask someone else to" });
+    }
 
     const purchaseRequest = await decide(req.params.id, "APPROVED", req.user!.userId);
     if (!purchaseRequest) return res.status(409).json({ error: "Only pending purchase requests can be approved" });
@@ -136,7 +133,7 @@ purchaseRequestsRouter.patch(
 
 purchaseRequestsRouter.patch(
   "/:id/reject",
-  requireRole("ADMIN", "MANAGER"),
+  requirePermission("approve_requests"),
   asyncHandler(async (req, res) => {
     const result = await loadInScope(req, req.params.id);
     if (result.error === 404) return res.status(404).json({ error: "Purchase request not found" });
@@ -158,8 +155,9 @@ purchaseRequestsRouter.patch(
 
 const receiveSchema = z.object({
   items: z
-    .array(z.object({ purchaseRequestItemId: z.string().min(1), quantityReceived: z.number().int().min(0) }))
-    .min(1),
+    .array(z.object({ purchaseRequestItemId: z.string().max(64).min(1), quantityReceived: z.number().int().min(0).max(1_000_000) }))
+    .min(1)
+    .max(100),
 });
 
 purchaseRequestsRouter.patch(
@@ -174,13 +172,7 @@ purchaseRequestsRouter.patch(
     });
     if (!purchaseRequest) return res.status(404).json({ error: "Purchase request not found" });
 
-    const hotelId = resolveHotelScope(req);
-    if (hotelId && purchaseRequest.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
-
-    const departmentId = resolveDepartmentScope(req);
-    if (departmentId && purchaseRequest.departmentId !== departmentId) {
-      return res.status(403).json({ error: "Forbidden" });
-    }
+    if (outOfScope(req, purchaseRequest)) return res.status(403).json({ error: "Forbidden" });
 
     if (purchaseRequest.status !== "APPROVED") {
       return res.status(400).json({ error: "Only approved purchase requests can be received" });

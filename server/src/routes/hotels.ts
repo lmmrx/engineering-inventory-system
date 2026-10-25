@@ -26,9 +26,9 @@ hotelsRouter.get(
 );
 
 const upsertSchema = z.object({
-  name: z.string().min(1),
-  code: z.string().min(1),
-  address: z.string().optional(),
+  name: z.string().trim().max(200).min(1),
+  code: z.string().trim().max(20).min(1),
+  address: z.string().trim().max(300).optional(),
 });
 
 hotelsRouter.post(

@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, getAuthToken, setAuthToken, withRetry } from "../api/client";
 import { CurrentUser } from "../types";
 
@@ -13,6 +14,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -43,6 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { token, user } = await withRetry(() =>
       api.post<{ token: string; user: CurrentUser }>("/auth/login", { email, password })
     );
+    // Nothing downloaded for someone else on this device may show for this user.
+    queryClient.clear();
     setAuthToken(token);
     setUser(user);
   }
@@ -50,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     setAuthToken(null);
     setUser(null);
+    queryClient.clear();
   }
 
   function updateUser(patch: Partial<CurrentUser>) {

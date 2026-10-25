@@ -5,28 +5,22 @@ import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { StaffDashboard } from "./StaffDashboard";
 import { MessageKey, useLocale, useT } from "../i18n";
-import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
-import { useDepartmentScope } from "../context/DepartmentScopeContext";
-import { DashboardSummary, InventoryItem, StockHealth, StockTransaction } from "../types";
-
-// Status colors are reserved for stock state and never reused for anything else,
-// and always appear next to a text label so color never carries meaning alone.
-const STATUS = {
-  critical: "#d03b3b",
-  warning: "#fab219",
-  good: "#0ca30c",
-  info: "#58a6ff",
-};
+import { timeZone, useScope } from "../hooks/useScope";
+import { LowStockList } from "../components/LowStockList";
+import { EmptyState, STATUS_COLORS, Section, StatTile, StatusDot } from "../components/ui";
+import { DashboardSummary, StockHealth, StockTransaction } from "../types";
 
 const HEALTH_SEGMENTS: { key: keyof StockHealth; label: MessageKey; color: string }[] = [
-  { key: "out", label: "health.out", color: STATUS.critical },
-  { key: "low", label: "health.low", color: STATUS.warning },
-  { key: "healthy", label: "health.healthy", color: STATUS.good },
-  { key: "over", label: "health.over", color: STATUS.info },
+  { key: "out", label: "health.out", color: STATUS_COLORS.critical },
+  { key: "low", label: "health.low", color: STATUS_COLORS.warning },
+  { key: "healthy", label: "health.healthy", color: STATUS_COLORS.good },
+  { key: "over", label: "health.over", color: STATUS_COLORS.info },
 ];
 
+// The dashboard shows the latest few movements; the full history is in Reports.
+const RECENT_ACTIVITY = 10;
 
-/** Staff see their own work first; Managers and Admins see the whole operation. */
+/** Staff see their own work first; everyone above them sees the whole operation. */
 export function Dashboard() {
   const { user } = useAuth();
   return user?.role === "STAFF" ? <StaffDashboard /> : <TeamDashboard />;
@@ -35,33 +29,17 @@ export function Dashboard() {
 function TeamDashboard() {
   const t = useT();
   const numberFormat = new Intl.NumberFormat(useLocale(), { maximumFractionDigits: 0 });
-  const { selectedHotelId } = useHotelScope();
-  const { selectedDepartmentId } = useDepartmentScope();
-  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
-  const hotelParam = viewingAllHotels ? "" : `hotelId=${selectedHotelId}&`;
-  const ready = !!selectedHotelId && !!selectedDepartmentId;
+  const { selectedHotelId, selectedDepartmentId, viewingAllHotels, ready, params } = useScope();
 
   const summaryQuery = useQuery({
     queryKey: ["dashboard-summary", selectedHotelId, selectedDepartmentId],
-    queryFn: () =>
-      api.get<DashboardSummary>(
-        `/dashboard/summary?${hotelParam}departmentId=${selectedDepartmentId}&tz=${encodeURIComponent(
-          Intl.DateTimeFormat().resolvedOptions().timeZone
-        )}`
-      ),
-    enabled: ready,
-  });
-
-  const lowStockQuery = useQuery({
-    queryKey: ["items", "low-stock", selectedHotelId, selectedDepartmentId],
-    queryFn: () =>
-      api.get<InventoryItem[]>(`/items?${hotelParam}departmentId=${selectedDepartmentId}&lowStockOnly=true`),
+    queryFn: () => api.get<DashboardSummary>(`/dashboard/summary?${params({ tz: timeZone() })}`),
     enabled: ready,
   });
 
   const activityQuery = useQuery({
-    queryKey: ["transactions", selectedHotelId, selectedDepartmentId],
-    queryFn: () => api.get<StockTransaction[]>(`/transactions?${hotelParam}departmentId=${selectedDepartmentId}`),
+    queryKey: ["transactions", selectedHotelId, selectedDepartmentId, "recent"],
+    queryFn: () => api.get<StockTransaction[]>(`/transactions?${params({ limit: String(RECENT_ACTIVITY) })}`),
     enabled: ready,
   });
 
@@ -72,7 +50,7 @@ function TeamDashboard() {
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatTile
           label={t("dash.stockValue")}
-          value={summary ? numberFormat.format(summary.stockValue.total) : undefined}
+          value={summary && numberFormat.format(summary.stockValue.total)}
           detail={
             summary &&
             (summary.itemCount === 0
@@ -84,13 +62,13 @@ function TeamDashboard() {
         />
         <StatTile
           label={t("dash.lowOrOut")}
-          value={summary && String(summary.health.out + summary.health.low)}
+          value={summary && summary.health.out + summary.health.low}
           detail={summary && t("dash.outLow", { out: summary.health.out, low: summary.health.low })}
           to="/inventory"
         />
         <StatTile
           label={t("dash.openWorkOrders")}
-          value={summary && String(summary.openWorkOrders.total)}
+          value={summary?.openWorkOrders.total}
           detail={
             summary &&
             (summary.openWorkOrders.stale > 0
@@ -101,29 +79,22 @@ function TeamDashboard() {
         />
         <StatTile
           label={t("dash.pendingRequests")}
-          value={summary && String(summary.pendingPurchaseRequests)}
+          value={summary?.pendingPurchaseRequests}
           detail={summary && (summary.pendingPurchaseRequests > 0 ? t("dash.awaitingApproval") : t("dash.nothingToApprove"))}
           to="/purchase-requests"
         />
       </div>
 
-      <section className="card p-4">
-        <div className="flex items-baseline justify-between mb-3">
-          <h2 className="font-semibold text-ink-100">{t("dash.stockHealth")}</h2>
-          {summary && <span className="text-xs text-ink-500">{t("dash.itemCount", { count: summary.itemCount })}</span>}
-        </div>
+      <Section
+        title={t("dash.stockHealth")}
+        aside={summary && <span className="text-xs text-ink-500">{t("dash.itemCount", { count: summary.itemCount })}</span>}
+      >
         {summary && <StockHealthBar health={summary.health} total={summary.itemCount} />}
-      </section>
+      </Section>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="card p-4">
-          <h2 className="font-semibold text-ink-100">{t("dash.runningOut")}</h2>
-          <p className="text-xs text-ink-500 mb-3">
-            {t("dash.runningOutHint")}
-          </p>
-          {summary?.runningOut.length === 0 && (
-            <p className="text-sm text-ink-500">{t("dash.noneIssued")}</p>
-          )}
+        <Section title={t("dash.runningOut")} subtitle={t("dash.runningOutHint")}>
+          {summary?.runningOut.length === 0 && <EmptyState>{t("dash.noneIssued")}</EmptyState>}
           <ul className="divide-y divide-navy-800">
             {summary?.runningOut.map((item) => (
               <li key={item.id} className="py-2 flex items-center justify-between gap-3 text-sm">
@@ -140,67 +111,31 @@ function TeamDashboard() {
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
 
-        <section className="card p-4">
-          <h2 className="font-semibold text-ink-100 mb-3">{t("dash.lowAlerts")}</h2>
-          {lowStockQuery.data?.length === 0 && <p className="text-sm text-ink-500">{t("dash.nothingBelow")}</p>}
-          <ul className="divide-y divide-navy-800">
-            {lowStockQuery.data?.map((item) => (
-              <li key={item.id} className="py-2 flex items-center justify-between text-sm">
-                <Link to="/inventory" className="text-ink-200 hover:text-gold-300">
-                  {item.name}
-                  {viewingAllHotels && item.hotel && (
-                    <span className="text-ink-600 font-normal font-mono"> · {item.hotel.code}</span>
-                  )}
-                </Link>
-                <span className="text-rose-400 font-medium font-mono">
-                  {item.quantityOnHand} / {item.reorderPoint} {item.unit}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Section title={t("dash.lowAlerts")}>
+          <LowStockList />
+        </Section>
 
-        <section className="card p-4">
-          <h2 className="font-semibold text-ink-100 mb-3">{t("dash.recentActivity")}</h2>
+        <Section title={t("dash.recentActivity")}>
+          {activityQuery.data?.length === 0 && <EmptyState>{t("dash.noActivity")}</EmptyState>}
           <ul className="divide-y divide-navy-800">
-            {activityQuery.data?.slice(0, 10).map((tx) => (
-              <li key={tx.id} className="py-2 text-sm flex items-center justify-between">
-                <span className="text-ink-200">
+            {activityQuery.data?.map((tx) => (
+              <li key={tx.id} className="py-2 text-sm flex items-center justify-between gap-3">
+                <span className="text-ink-200 min-w-0 truncate">
                   {t(`tx.${tx.type}`)} · {tx.item?.name ?? tx.itemId}
-                  {viewingAllHotels && tx.item?.hotel && (
-                    <span className="text-ink-600 font-mono"> · {tx.item.hotel.code}</span>
-                  )}
+                  {viewingAllHotels && tx.item?.hotel && <span className="text-ink-600 font-mono"> · {tx.item.hotel.code}</span>}
                 </span>
-                <span className={`font-mono ${tx.quantity < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                <span className={`font-mono shrink-0 ${tx.quantity < 0 ? "text-rose-400" : "text-emerald-400"}`}>
                   {tx.quantity > 0 ? "+" : ""}
                   {tx.quantity}
                 </span>
               </li>
             ))}
-            {activityQuery.data?.length === 0 && <p className="text-sm text-ink-500">{t("dash.noActivity")}</p>}
           </ul>
-        </section>
+        </Section>
       </div>
     </div>
-  );
-}
-
-function StatTile({ label, value, detail, to }: { label: string; value?: string; detail?: string; to?: string }) {
-  const body = (
-    <>
-      <div className="text-xs uppercase tracking-wide text-ink-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-ink-100 font-mono">{value ?? "—"}</div>
-      <div className="mt-1 text-xs text-ink-500">{detail ?? " "}</div>
-    </>
-  );
-  return to ? (
-    <Link to={to} className="card p-4 block transition hover:border-navy-600">
-      {body}
-    </Link>
-  ) : (
-    <div className="card p-4">{body}</div>
   );
 }
 
@@ -264,12 +199,12 @@ function StockHealthBar({ health, total }: { health: StockHealth; total: number 
 
 function DaysOfCover({ days }: { days: number | null }) {
   const t = useT();
-  const color = days === null ? null : days <= 3 ? STATUS.critical : days <= 7 ? STATUS.warning : null;
+  const color = days === null ? null : days <= 3 ? STATUS_COLORS.critical : days <= 7 ? STATUS_COLORS.warning : null;
   const text =
     days === null ? t("cover.overYear") : days === 0 ? t("cover.out") : days === 1 ? t("cover.day") : t("cover.days", { count: days });
   return (
     <span className="flex items-center gap-1.5 shrink-0 text-sm font-mono text-ink-100">
-      {color && <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />}
+      {color && <StatusDot color={color} />}
       {text}
     </span>
   );

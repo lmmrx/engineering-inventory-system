@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { audit, created, diff, recordRef } from "../lib/audit";
-import { requireAuth, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
+import { outOfScope, requireAuth, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const workOrdersRouter = Router();
 
@@ -36,11 +36,11 @@ async function invalidAssignee(userId: string | null | undefined, hotelId: strin
 }
 
 const createSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  hotelId: z.string().min(1),
-  departmentId: z.string().min(1),
-  assignedToUserId: z.string().optional(),
+  title: z.string().trim().max(200).min(1),
+  description: z.string().trim().max(4000).optional(),
+  hotelId: z.string().max(64).min(1),
+  departmentId: z.string().max(64).min(1),
+  assignedToUserId: z.string().max(64).optional(),
 });
 
 workOrdersRouter.post(
@@ -49,11 +49,11 @@ workOrdersRouter.post(
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const hotelId = resolveHotelScope(req);
-    if (hotelId && parsed.data.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
-
-    const departmentId = resolveDepartmentScope(req);
-    if (departmentId && parsed.data.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
+    if (outOfScope(req, parsed.data)) return res.status(403).json({ error: "Forbidden" });
+    // Same rule as when editing: Staff may only assign work to themselves.
+    if (req.user!.role === "STAFF" && parsed.data.assignedToUserId && parsed.data.assignedToUserId !== req.user!.userId) {
+      return res.status(403).json({ error: "Staff can only assign work orders to themselves" });
+    }
 
     if (await invalidAssignee(parsed.data.assignedToUserId, parsed.data.hotelId, parsed.data.departmentId)) {
       return res.status(400).json({ error: "The assignee must be an active user in this hotel and department" });
@@ -75,10 +75,10 @@ workOrdersRouter.post(
 );
 
 const updateSchema = z.object({
-  title: z.string().min(1).optional(),
-  description: z.string().optional(),
+  title: z.string().trim().max(200).min(1).optional(),
+  description: z.string().trim().max(4000).optional(),
   status: z.enum(["OPEN", "IN_PROGRESS", "COMPLETED"]).optional(),
-  assignedToUserId: z.string().nullable().optional(),
+  assignedToUserId: z.string().max(64).nullable().optional(),
 });
 
 workOrdersRouter.patch(
@@ -90,11 +90,7 @@ workOrdersRouter.patch(
     const existing = await prisma.workOrder.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Work order not found" });
 
-    const hotelId = resolveHotelScope(req);
-    if (hotelId && existing.hotelId !== hotelId) return res.status(403).json({ error: "Forbidden" });
-
-    const departmentId = resolveDepartmentScope(req);
-    if (departmentId && existing.departmentId !== departmentId) return res.status(403).json({ error: "Forbidden" });
+    if (outOfScope(req, existing)) return res.status(403).json({ error: "Forbidden" });
 
     // Staff can take an unassigned job for themselves, but handing work to
     // someone else (or taking a colleague's) is for Managers and Admins.

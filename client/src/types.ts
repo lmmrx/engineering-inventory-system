@@ -1,12 +1,50 @@
 import type { Preferences } from "./preferences";
 
-export type Role = "ADMIN" | "MANAGER" | "STAFF";
+export type Role = "ADMIN" | "MANAGER" | "SUPERVISOR" | "STAFF";
+
+/** Features a user can have, from their role or granted to them individually (see server lib/permissions.ts). */
+export type Permission =
+  | "approve_requests"
+  | "edit_items"
+  | "view_analytics"
+  | "reports"
+  | "manage_categories"
+  | "audit_log"
+  | "manage_staff";
+
+/** Features that can be granted to an individual on top of their role. */
+export const GRANTABLE_PERMISSIONS: Permission[] = [
+  "approve_requests",
+  "edit_items",
+  "view_analytics",
+  "reports",
+  "manage_categories",
+  "audit_log",
+];
+
+/** What each role includes before any extras. */
+export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
+  ADMIN: [...GRANTABLE_PERMISSIONS, "manage_staff"],
+  MANAGER: [...GRANTABLE_PERMISSIONS, "manage_staff"],
+  SUPERVISOR: ["approve_requests", "edit_items", "view_analytics", "reports", "manage_staff"],
+  STAFF: [],
+};
+
+/** Higher manages lower, within their own hotel and department. */
+export const ROLE_RANK: Record<Role, number> = { STAFF: 1, SUPERVISOR: 2, MANAGER: 3, ADMIN: 4 };
+
+/** Whether the signed-in user has a feature. */
+export function can(user: { permissions?: Permission[] } | null | undefined, permission: Permission) {
+  return !!user?.permissions?.includes(permission);
+}
 
 export interface CurrentUser {
   id: string;
   name: string;
   email: string;
   role: Role;
+  /** The role's features plus any granted extras. */
+  permissions?: Permission[];
   hotelId: string | null;
   departmentId: string | null;
   mustChangePassword?: boolean;
@@ -19,14 +57,6 @@ export interface CurrentUser {
   manager?: { id: string; name: string } | null;
   /** Changes whenever the profile photo does; null when there's no photo. */
   avatarVersion?: number | null;
-}
-
-/** Someone the user can pick as their manager. */
-export interface ManagerOption {
-  id: string;
-  name: string;
-  role: Role;
-  position: string | null;
 }
 
 /** Start reminding people this many days before their password expires. */
@@ -283,4 +313,8 @@ export interface AppUser {
   disabledAt?: string | null;
   lockedUntil?: string | null;
   mustChangePassword?: boolean;
+  position?: string | null;
+  /** Features granted on top of the role. */
+  extraPermissions?: Permission[];
+  manager?: { id: string; name: string } | null;
 }

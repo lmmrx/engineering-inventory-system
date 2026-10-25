@@ -4,11 +4,13 @@ import { asyncHandler } from "../lib/asyncHandler";
 import { DAY_MS } from "../lib/stock";
 import { FORECAST_DAYS, capOutliers, median, medianAbsoluteDeviation, suggestedReorderPoint } from "../lib/forecast";
 import { HISTORY_DAYS, groupByItem, localDayCounter, outlook, usageHistory } from "../lib/usage";
-import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
+import { rateLimit } from "../lib/rateLimit";
+import { requireAuth, requirePermission, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const analyticsRouter = Router();
 
-analyticsRouter.use(requireAuth, requireRole("ADMIN", "MANAGER"));
+// Forecasting every item is the heaviest request the API serves.
+analyticsRouter.use(requireAuth, requirePermission("view_analytics"), rateLimit({ max: 30, windowMs: 60_000, key: (req) => req.user!.userId }));
 
 // The window unusual activity is reported for.
 const ANOMALY_WINDOW_DAYS = 30;

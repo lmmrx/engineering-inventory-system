@@ -43,7 +43,7 @@ function ProtectedApp() {
           <Route
             path="analytics"
             element={
-              <RoleGate roles={["ADMIN", "MANAGER"]}>
+              <RoleGate permission="view_analytics">
                 <Analytics />
               </RoleGate>
             }
@@ -64,7 +64,7 @@ function ProtectedApp() {
             <Route
               path="organization/users"
               element={
-                <RoleGate roles={["ADMIN", "MANAGER"]}>
+                <RoleGate permission="manage_staff">
                   <OrgUsers />
                 </RoleGate>
               }
@@ -72,7 +72,7 @@ function ProtectedApp() {
             <Route
               path="organization/categories"
               element={
-                <RoleGate roles={["ADMIN", "MANAGER"]}>
+                <RoleGate permission="manage_categories">
                   <OrgCategories />
                 </RoleGate>
               }
@@ -88,7 +88,7 @@ function ProtectedApp() {
             <Route
               path="roles"
               element={
-                <RoleGate roles={["ADMIN", "MANAGER"]}>
+                <RoleGate roles={["ADMIN", "MANAGER", "SUPERVISOR"]}>
                   <RolesPermissions />
                 </RoleGate>
               }
@@ -96,7 +96,7 @@ function ProtectedApp() {
             <Route
               path="data"
               element={
-                <RoleGate roles={["ADMIN", "MANAGER"]}>
+                <RoleGate permission="reports">
                   <DataExport />
                 </RoleGate>
               }
@@ -104,7 +104,7 @@ function ProtectedApp() {
             <Route
               path="audit-log"
               element={
-                <RoleGate roles={["ADMIN", "MANAGER"]}>
+                <RoleGate permission="audit_log">
                   <AuditLog />
                 </RoleGate>
               }

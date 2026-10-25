@@ -1,4 +1,4 @@
-import { Request, Router } from "express";
+import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
@@ -19,30 +19,6 @@ meRouter.get(
   })
 );
 
-/**
- * Who the user may pick as their manager: active Admins, plus Managers at the
- * user's own hotel. Never themselves.
- */
-async function managerOptions(req: Request) {
-  const me = req.user!;
-  return prisma.user.findMany({
-    where: {
-      id: { not: me.userId },
-      disabledAt: null,
-      OR: [{ role: "ADMIN" }, ...(me.hotelId ? [{ role: "MANAGER" as const, hotelId: me.hotelId }] : [])],
-    },
-    select: { id: true, name: true, role: true, position: true },
-    orderBy: [{ role: "asc" }, { name: "asc" }],
-  });
-}
-
-meRouter.get(
-  "/manager-options",
-  asyncHandler(async (req, res) => {
-    res.json(await managerOptions(req));
-  })
-);
-
 // Digits, spaces and the usual phone punctuation; at least 5 digits.
 const phoneSchema = z
   .string()
@@ -52,13 +28,13 @@ const phoneSchema = z
   .refine((v) => v === "" || (v.match(/\d/g) ?? []).length >= 5, "Enter a complete phone number");
 
 // Users can change their own details and display preferences, nothing else
-// (never their role, hotel, department or email).
+// (never their role, hotel, department, email or manager — whoever manages
+// the account sets the manager).
 const updateMeSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
     position: z.string().trim().max(100),
     phone: phoneSchema,
-    managerId: z.string().min(1).nullable(),
     preferences: preferencesSchema,
   })
   .partial()
@@ -71,13 +47,6 @@ meRouter.patch(
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     const data = parsed.data;
 
-    if (data.managerId) {
-      const allowed = await managerOptions(req);
-      if (!allowed.some((m) => m.id === data.managerId)) {
-        return res.status(400).json({ error: "Choose an Admin, or a Manager at your hotel" });
-      }
-    }
-
     const before = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.userId } });
     const user = await prisma.user.update({
       where: { id: before.id },
@@ -86,13 +55,12 @@ meRouter.patch(
         // Blank clears the field.
         position: data.position === undefined ? undefined : data.position || null,
         phone: data.phone === undefined ? undefined : data.phone || null,
-        managerId: data.managerId,
         // Merged, so changing the theme doesn't reset the language.
         preferences: data.preferences ? { ...readPreferences(before.preferences), ...data.preferences } : undefined,
       },
     });
 
-    const changes = await diff(before, user, ["name", "position", "phone", "managerId"]);
+    const changes = await diff(before, user, ["name", "position", "phone"]);
     if (Object.keys(changes).length > 0) {
       await audit(req, {
         action: "user.updated",

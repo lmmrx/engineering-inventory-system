@@ -3,15 +3,15 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
-import { useDepartmentScope } from "../context/DepartmentScopeContext";
-import { InventoryItem, MyWork, MyWorkOrder, WorkOrderStatus } from "../types";
+import { useScope } from "../hooks/useScope";
+import { LowStockList, useLowStock } from "../components/LowStockList";
+import { EmptyState, STATUS_COLORS, Section, StatTile, StatusDot } from "../components/ui";
+import { MyWork, MyWorkOrder, WorkOrderStatus } from "../types";
 import { MessageKey, useLocale, useT } from "../i18n";
 
-// Same reserved stock-status colors as the main dashboard, always next to a text label.
 const STOCK_STATUS: Record<MyWork["topItems"][number]["status"], { label: MessageKey; color: string | null }> = {
-  out: { label: "stock.out", color: "#d03b3b" },
-  low: { label: "stock.low", color: "#fab219" },
+  out: { label: "stock.out", color: STATUS_COLORS.critical },
+  low: { label: "stock.low", color: STATUS_COLORS.warning },
   healthy: { label: "stock.ok", color: null },
   over: { label: "stock.over", color: null },
 };
@@ -31,24 +31,16 @@ export function StaffDashboard() {
   const { user } = useAuth();
   const t = useT();
   const shortDate = useShortDate();
-  const { selectedHotelId } = useHotelScope();
-  const { selectedDepartmentId } = useDepartmentScope();
+  const { selectedHotelId, selectedDepartmentId, ready, params } = useScope();
   const queryClient = useQueryClient();
-  const ready = !!selectedHotelId && !!selectedDepartmentId;
-  const hotelParam = selectedHotelId === ALL_HOTELS ? "" : `hotelId=${selectedHotelId}&`;
 
   const myWorkQuery = useQuery({
     queryKey: ["my-work", selectedHotelId, selectedDepartmentId],
-    queryFn: () => api.get<MyWork>(`/dashboard/my-work?${hotelParam}departmentId=${selectedDepartmentId}`),
+    queryFn: () => api.get<MyWork>(`/dashboard/my-work?${params()}`),
     enabled: ready,
   });
 
-  const lowStockQuery = useQuery({
-    queryKey: ["items", "low-stock", selectedHotelId, selectedDepartmentId],
-    queryFn: () =>
-      api.get<InventoryItem[]>(`/items?${hotelParam}departmentId=${selectedDepartmentId}&lowStockOnly=true`),
-    enabled: ready,
-  });
+  const lowStockQuery = useLowStock();
 
   const updateMutation = useMutation({
     mutationFn: ({ id, ...change }: { id: string; status?: WorkOrderStatus; assignedToUserId?: string }) =>
@@ -69,18 +61,18 @@ export function StaffDashboard() {
       <h1 className="text-lg font-semibold text-ink-100">{t("staff.hi", { name: user?.name.split(" ")[0] ?? "" })}</h1>
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
-        <Tile
+        <StatTile
           label={t("staff.myOpen")}
           value={work?.assigned.length}
           detail={work && (work.assigned.length === 0 ? t("staff.nothingAssigned") : t("staff.inProgressCount", { count: inProgress }))}
           href="#my-work"
         />
-        <Tile
+        <StatTile
           label={t("staff.completedWeek")}
           value={work?.completedThisWeek}
           detail={work && t("staff.last7")}
         />
-        <Tile
+        <StatTile
           label={t("dash.lowOrOut")}
           value={lowCount}
           detail={lowCount === undefined ? undefined : lowCount === 0 ? t("staff.allStocked") : t("staff.needsRestock")}
@@ -98,7 +90,7 @@ export function StaffDashboard() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Section id="my-work" title={t("staff.myWork")} subtitle={t("staff.myWorkHint")}>
-          {work?.assigned.length === 0 && <Empty>{t("staff.nothingNow")}</Empty>}
+          {work?.assigned.length === 0 && <EmptyState>{t("staff.nothingNow")}</EmptyState>}
           <ul className="divide-y divide-navy-800">
             {work?.assigned.map((wo) => {
               const next = NEXT_STEP[wo.status];
@@ -124,7 +116,7 @@ export function StaffDashboard() {
         </Section>
 
         <Section title={t("staff.upForGrabs")} subtitle={t("staff.upForGrabsHint")}>
-          {work?.upForGrabs.length === 0 && <Empty>{t("staff.allTaken")}</Empty>}
+          {work?.upForGrabs.length === 0 && <EmptyState>{t("staff.allTaken")}</EmptyState>}
           <ul className="divide-y divide-navy-800">
             {work?.upForGrabs.map((wo) => (
               <WorkOrderRow
@@ -147,7 +139,7 @@ export function StaffDashboard() {
         </Section>
 
         <Section title={t("staff.topItems")} subtitle={t("staff.topItemsHint")}>
-          {work?.topItems.length === 0 && <Empty>{t("staff.noneIssued")}</Empty>}
+          {work?.topItems.length === 0 && <EmptyState>{t("staff.noneIssued")}</EmptyState>}
           <ul className="divide-y divide-navy-800">
             {work?.topItems.map((item) => {
               const status = STOCK_STATUS[item.status];
@@ -162,9 +154,7 @@ export function StaffDashboard() {
                     </span>
                   </div>
                   <span className="flex items-center gap-1.5 shrink-0 font-mono text-ink-100">
-                    {status.color && (
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color }} aria-hidden="true" />
-                    )}
+                    {status.color && <StatusDot color={status.color} />}
                     {item.quantityOnHand} {item.unit}
                     <span className="text-xs text-ink-500 font-sans">{t(status.label)}</span>
                   </span>
@@ -175,7 +165,7 @@ export function StaffDashboard() {
         </Section>
 
         <Section title={t("staff.recent")} subtitle={t("staff.recentHint")}>
-          {work?.recent.length === 0 && <Empty>{t("staff.noMovements")}</Empty>}
+          {work?.recent.length === 0 && <EmptyState>{t("staff.noMovements")}</EmptyState>}
           <ul className="divide-y divide-navy-800">
             {work?.recent.map((tx) => (
               <li key={tx.id} className="py-2 text-sm flex items-center justify-between gap-3">
@@ -194,19 +184,7 @@ export function StaffDashboard() {
       </div>
 
       <Section title={t("dash.lowAlerts")} subtitle={t("staff.lowHint")}>
-        {lowStockQuery.data?.length === 0 && <Empty>{t("dash.nothingBelow")}</Empty>}
-        <ul className="divide-y divide-navy-800">
-          {lowStockQuery.data?.map((item) => (
-            <li key={item.id} className="py-2 flex items-center justify-between text-sm">
-              <Link to="/inventory" className="text-ink-200 hover:text-gold-300">
-                {item.name}
-              </Link>
-              <span className="text-rose-400 font-medium font-mono">
-                {item.quantityOnHand} / {item.reorderPoint} {item.unit}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <LowStockList />
       </Section>
     </div>
   );
@@ -232,44 +210,4 @@ function WorkOrderRow({ workOrder: wo, action }: { workOrder: MyWorkOrder; actio
       <div className="shrink-0">{action}</div>
     </li>
   );
-}
-
-function Tile({
-  label,
-  value,
-  detail,
-  href,
-  to,
-}: {
-  label: string;
-  value?: number;
-  detail?: string | false;
-  href?: string;
-  to?: string;
-}) {
-  const body = (
-    <>
-      <div className="text-xs uppercase tracking-wide text-ink-500">{label}</div>
-      <div className="mt-1 text-2xl font-semibold text-ink-100 font-mono">{value ?? "—"}</div>
-      <div className="mt-1 text-xs text-ink-500">{detail || " "}</div>
-    </>
-  );
-  const className = "card p-4 block transition hover:border-navy-600";
-  if (to) return <Link to={to} className={className}>{body}</Link>;
-  if (href) return <a href={href} className={className}>{body}</a>;
-  return <div className="card p-4">{body}</div>;
-}
-
-function Section({ id, title, subtitle, children }: { id?: string; title: string; subtitle: string; children: ReactNode }) {
-  return (
-    <section id={id} className="card p-4 scroll-mt-20">
-      <h2 className="font-semibold text-ink-100">{title}</h2>
-      <p className="text-xs text-ink-500 mb-3">{subtitle}</p>
-      {children}
-    </section>
-  );
-}
-
-function Empty({ children }: { children: ReactNode }) {
-  return <p className="text-sm text-ink-500">{children}</p>;
 }

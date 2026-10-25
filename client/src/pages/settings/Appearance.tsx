@@ -207,8 +207,8 @@ function FontDialog({
             aria-valuetext={t(`size.${fontSize}`)}
           />
           <div className="flex justify-between text-ink-500 mt-1" aria-hidden="true">
-            <span style={{ fontSize: "11px" }}>{t("size.tiny")}</span>
-            <span style={{ fontSize: "18px" }}>{t("size.huge")}</span>
+            <span className="text-[0.6875rem]">{t("size.tiny")}</span>
+            <span className="text-lg">{t("size.huge")}</span>
           </div>
         </div>
 

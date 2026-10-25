@@ -58,9 +58,15 @@
 :root[data-theme="light"] .text-amber-200\/70 { color: rgb(154 103 0 / 0.85); }
 
 @layer base {
+  /* The font-size setting scales the root size that every rem-based size —
+     text, line height, padding, icons, row heights — is built on, so text and
+     the space around it grow together on every page (like a browser's own
+     text-size setting). Page zoom is separate and also scales borders and images. */
+  html {
+    font-size: calc(100% * var(--font-scale));
+  }
   body {
     @apply bg-navy-950 text-ink-300 font-sans;
-    font-size: calc(1rem * var(--font-scale));
   }
   ::selection {
     @apply bg-gold-500/30;

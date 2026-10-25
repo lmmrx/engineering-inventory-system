@@ -38,7 +38,7 @@ function tooManyAttempts(res: Response, retryAfterSeconds: number) {
 }
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().max(254).email(),
   password: z.string().min(1).max(200),
 });
 

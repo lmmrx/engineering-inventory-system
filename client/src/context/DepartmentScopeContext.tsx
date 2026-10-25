@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { Department } from "../types";
 import { useAuth } from "./AuthContext";
@@ -14,30 +15,28 @@ const DepartmentScopeContext = createContext<DepartmentScopeValue | undefined>(u
 
 export function DepartmentScopeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
-
   // Unlike hotels, there's no "All Departments" mode — a Housekeeping linen
   // count and an Engineering HVAC filter count aren't meaningful mixed
   // together, so every view always has exactly one department selected.
   const canSwitchDepartments = user?.role === "ADMIN";
+  // Shared with every other page that lists departments, so it's fetched once.
+  const { data: departments = [] } = useQuery({
+    queryKey: ["departments"],
+    queryFn: () => api.get<Department[]>("/departments"),
+    enabled: !!user,
+  });
+  const [chosen, setChosen] = useState("");
 
+  // Admins start on their own department if they have one, else the first.
   useEffect(() => {
-    if (!user) return;
-    api.get<Department[]>("/departments").then((data) => {
-      setDepartments(data);
-      if (!canSwitchDepartments && user.departmentId) {
-        setSelectedDepartmentId(user.departmentId);
-      } else if (canSwitchDepartments && data.length > 0 && !selectedDepartmentId) {
-        setSelectedDepartmentId(user.departmentId ?? data[0].id);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    if (canSwitchDepartments && !chosen && departments.length > 0) setChosen(user?.departmentId ?? departments[0].id);
+  }, [canSwitchDepartments, chosen, departments, user?.departmentId]);
+
+  const selectedDepartmentId = canSwitchDepartments ? chosen : user?.departmentId ?? "";
 
   return (
     <DepartmentScopeContext.Provider
-      value={{ departments, selectedDepartmentId, setSelectedDepartmentId, canSwitchDepartments }}
+      value={{ departments, selectedDepartmentId, setSelectedDepartmentId: setChosen, canSwitchDepartments }}
     >
       {children}
     </DepartmentScopeContext.Provider>

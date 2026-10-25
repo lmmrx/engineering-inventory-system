@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
-import { useDepartmentScope } from "../context/DepartmentScopeContext";
+import { useScope } from "../hooks/useScope";
+import { useAuth } from "../context/AuthContext";
 import { InventoryItem, PurchaseRequest } from "../types";
 import { RoleGate } from "../components/RoleGate";
 import { Modal, ModalActions } from "../components/Modal";
@@ -17,35 +17,32 @@ const statusColor: Record<string, string> = {
 
 export function PurchaseRequests() {
   const t = useT();
+  const { user } = useAuth();
   const locale = useLocale();
-  const { selectedHotelId } = useHotelScope();
-  const { selectedDepartmentId } = useDepartmentScope();
-  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
+  const { selectedHotelId, selectedDepartmentId, viewingAllHotels, ready, params } = useScope();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
 
   const requestsQuery = useQuery({
     queryKey: ["purchase-requests", selectedHotelId, selectedDepartmentId],
-    queryFn: () => {
-      const params = new URLSearchParams({ departmentId: selectedDepartmentId });
-      if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
-      return api.get<PurchaseRequest[]>(`/purchase-requests?${params}`);
-    },
-    enabled: !!selectedHotelId && !!selectedDepartmentId,
+    queryFn: () => api.get<PurchaseRequest[]>(`/purchase-requests?${params()}`),
+    enabled: ready,
   });
 
   const itemsQuery = useQuery({
     queryKey: ["items", selectedHotelId, selectedDepartmentId],
-    queryFn: () =>
-      api.get<InventoryItem[]>(`/items?${new URLSearchParams({ hotelId: selectedHotelId, departmentId: selectedDepartmentId })}`),
-    enabled: !!selectedHotelId && !!selectedDepartmentId && !viewingAllHotels,
+    // Shares the Inventory page's cache; only needed when a specific hotel is picked.
+    queryFn: () => api.get<InventoryItem[]>(`/items?${params()}`),
+    enabled: ready && !viewingAllHotels,
   });
 
   const [actionError, setActionError] = useState<string | null>(null);
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["purchase-requests", selectedHotelId, selectedDepartmentId] });
-    queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId, selectedDepartmentId] });
+    // Receiving changes stock, which several pages show.
+    for (const key of ["purchase-requests", "items", "transactions", "dashboard-summary", "my-work", "analytics"]) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
   }
 
   function handleActionError(err: unknown) {
@@ -113,8 +110,9 @@ export function PurchaseRequests() {
                   )}
                 </span>
               </div>
-              <RoleGate roles={["ADMIN", "MANAGER"]}>
-                {pr.status === "PENDING" && (
+              <RoleGate permission="approve_requests">
+                {/* Someone else approves a request (Admins excepted), as the server enforces. */}
+                {pr.status === "PENDING" && (pr.requestedBy?.id !== user?.id || user?.role === "ADMIN") && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => approveMutation.mutate(pr.id)}
@@ -130,7 +128,8 @@ export function PurchaseRequests() {
                     </button>
                   </div>
                 )}
-                {pr.status === "APPROVED" && (
+              </RoleGate>
+              {pr.status === "APPROVED" && (
                   <button
                     onClick={() => receiveMutation.mutate(pr)}
                     className="text-xs px-2 py-1 rounded-md border border-blue-700/60 text-blue-300 hover:bg-blue-500/10"
@@ -138,7 +137,6 @@ export function PurchaseRequests() {
                     {t("pr.markReceived")}
                   </button>
                 )}
-              </RoleGate>
             </div>
             <ul className="text-sm text-ink-300 space-y-1">
               {pr.items.map((line) => (

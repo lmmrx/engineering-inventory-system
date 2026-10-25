@@ -1,4 +1,4 @@
-# Property Inventory Management System
+# ZS Holdings Inventory
 
 A multi-hotel, multi-department inventory system. Every hotel has four live
 departments — Engineering, Housekeeping, Guest Services, and Food & Beverage —
@@ -19,7 +19,9 @@ adding a fifth department later is a data change, not a schema change.
 - Work orders, with stock transactions linkable to a work order
 - Admins switch between hotels ("Property") and departments from the account menu;
   Managers/Staff are pinned to their own hotel and department
-- Roles: Admin (everything), Manager (their hotel + department), Staff (day-to-day stock actions)
+- Roles: Admin (everything), Manager (their hotel + department), Supervisor (approvals, items, reports and
+  Staff accounts in their hotel + department), Staff (day-to-day stock actions). Admins, Managers and
+  Supervisors can also grant individual users extra features without changing their role
 
 ## Running locally (free — no cloud account needed)
 
@@ -152,6 +154,14 @@ Do these in order — each step needs a value produced by the one before it.
 Go back to Render → your service → Environment, and set `CLIENT_ORIGIN` to the
 Vercel URL from step 3 (no trailing slash). Save — Render redeploys
 automatically. Now the API only accepts requests from your live frontend.
+
+### Backups and disaster recovery
+
+Encrypted, verified, off-site database backups run every 4 hours on GitHub
+Actions (free), on top of Neon's point-in-time restore, with hourly
+monitoring and quarterly restore drills. Setup, schedules, security controls
+and step-by-step recovery for every kind of incident:
+[docs/backup-and-disaster-recovery.md](docs/backup-and-disaster-recovery.md).
 
 ### Locked out of an Admin account
 

@@ -1,12 +1,12 @@
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useT } from "../../i18n";
-import { settingsGroupsForRole } from "./settingsNav";
+import { settingsGroupsForUser } from "./settingsNav";
 
 export function SettingsIndex() {
   const { user } = useAuth();
   if (!user) return null;
-  const groups = settingsGroupsForRole(user.role);
+  const groups = settingsGroupsForUser(user);
   const target = groups[0]?.items[0]?.to ?? "profile";
   return <Navigate to={target} replace />;
 }
@@ -17,7 +17,7 @@ export function SettingsLayout() {
   const navigate = useNavigate();
   const t = useT();
   if (!user) return null;
-  const groups = settingsGroupsForRole(user.role);
+  const groups = settingsGroupsForUser(user);
 
   return (
     <div>

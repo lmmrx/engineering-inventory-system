@@ -1,4 +1,5 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { Hotel } from "../types";
 import { useAuth } from "./AuthContext";
@@ -19,26 +20,24 @@ const HotelScopeContext = createContext<HotelScopeValue | undefined>(undefined);
 
 export function HotelScopeProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const [hotels, setHotels] = useState<Hotel[]>([]);
-  const [selectedHotelId, setSelectedHotelId] = useState<string>("");
-
   const canSwitchHotels = user?.role === "ADMIN";
+  // Shared with every other page that lists hotels, so it's fetched once.
+  const { data: hotels = [] } = useQuery({
+    queryKey: ["hotels"],
+    queryFn: () => api.get<Hotel[]>("/hotels"),
+    enabled: !!user,
+  });
+  const [chosen, setChosen] = useState("");
 
+  // Admins start on the first hotel; everyone else is always on their own.
   useEffect(() => {
-    if (!user) return;
-    api.get<Hotel[]>("/hotels").then((data) => {
-      setHotels(data);
-      if (!canSwitchHotels && user.hotelId) {
-        setSelectedHotelId(user.hotelId);
-      } else if (canSwitchHotels && data.length > 0 && !selectedHotelId) {
-        setSelectedHotelId(data[0].id);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+    if (canSwitchHotels && !chosen && hotels.length > 0) setChosen(hotels[0].id);
+  }, [canSwitchHotels, chosen, hotels]);
+
+  const selectedHotelId = canSwitchHotels ? chosen : user?.hotelId ?? "";
 
   return (
-    <HotelScopeContext.Provider value={{ hotels, selectedHotelId, setSelectedHotelId, canSwitchHotels }}>
+    <HotelScopeContext.Provider value={{ hotels, selectedHotelId, setSelectedHotelId: setChosen, canSwitchHotels }}>
       {children}
     </HotelScopeContext.Provider>
   );

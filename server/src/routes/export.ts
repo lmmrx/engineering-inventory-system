@@ -5,12 +5,18 @@ import { asyncHandler } from "../lib/asyncHandler";
 import { recordRef as ref } from "../lib/audit";
 import { DAY_MS, StockStatus, stockStatus } from "../lib/stock";
 import { loadOutlooks } from "../lib/usage";
-import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
+import { rateLimit } from "../lib/rateLimit";
+import { requireAuth, requirePermission, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 import { auditLogInclude, auditLogWhere } from "./auditLogs";
 
 export const exportRouter = Router();
 
-exportRouter.use(requireAuth, requireRole("ADMIN", "MANAGER"));
+// Reports need the "reports" feature; the audit log export needs "audit_log" (checked on that route).
+// Reports can run to tens of thousands of rows.
+exportRouter.use(requireAuth, rateLimit({ max: 30, windowMs: 60_000, key: (req) => req.user!.userId }));
+exportRouter.use((req, res, next) =>
+  req.path === "/audit-log" ? requirePermission("audit_log")(req, res, next) : requirePermission("reports")(req, res, next)
+);
 
 // A safety net for the row-per-event reports; a date range keeps real exports well under it.
 const MAX_ROWS = 50_000;
@@ -306,7 +312,7 @@ exportRouter.get(
 
     const transactions = await prisma.stockTransaction.findMany({
       where: { item: itemScope, createdAt: { gte: period.from, lte: period.to } },
-      include: { item: { include: itemInclude }, performedBy: true, workOrder: true },
+      include: { item: { include: itemInclude }, performedBy: { select: { name: true } }, workOrder: { select: { title: true } } },
       orderBy: { createdAt: "desc" },
       take: MAX_ROWS,
     });
@@ -353,8 +359,8 @@ exportRouter.get(
       where: { hotelId, departmentId, createdAt: { gte: period.from, lte: period.to } },
       include: {
         hotel: true,
-        createdBy: true,
-        assignedTo: true,
+        createdBy: { select: { name: true } },
+        assignedTo: { select: { name: true } },
         transactions: { where: { type: "ISSUE" }, select: { quantity: true, item: { select: { unitCost: true } } } },
       },
       orderBy: { createdAt: "desc" },
@@ -403,7 +409,7 @@ exportRouter.get(
 
     const requests = await prisma.purchaseRequest.findMany({
       where: { hotelId, departmentId, createdAt: { gte: period.from, lte: period.to } },
-      include: { hotel: true, requestedBy: true, approvedBy: true, items: { include: { item: true } } },
+      include: { hotel: true, requestedBy: { select: { name: true } }, approvedBy: { select: { name: true } }, items: { include: { item: true } } },
       orderBy: { createdAt: "desc" },
       take: MAX_ROWS,
     });

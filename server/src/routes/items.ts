@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { audit, created, diff } from "../lib/audit";
-import { requireAuth, requireRole, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
+import { requireAuth, requirePermission, resolveDepartmentScope, resolveHotelScope } from "../middleware/auth";
 
 export const itemsRouter = Router();
 
@@ -37,33 +37,46 @@ async function categoryMismatch(categoryId: string, departmentId: string) {
   return !category || category.departmentId !== departmentId;
 }
 
-const upsertSchema = z.object({
-  name: z.string().min(1),
-  sku: z.string().optional(),
-  unit: z.string().min(1).default("ea"),
-  quantityOnHand: z.number().int().min(0).max(1_000_000).default(0),
-  reorderPoint: z.number().int().min(0).default(0),
-  maxLevel: z.number().int().min(0).nullable().optional(),
-  unitCost: z.number().min(0).nullable().optional(),
-  location: z.string().optional(),
-  hotelId: z.string().min(1),
-  departmentId: z.string().min(1),
-  categoryId: z.string().min(1),
+// Fields an item has. No defaults here: an edit must only change what it
+// sends (a default would silently reset, say, the unit on every edit).
+const itemFields = z.object({
+  name: z.string().trim().min(1).max(200),
+  // Blank or null clears these optional text fields.
+  sku: z.string().trim().max(100).nullable().optional().transform((v) => (v === undefined ? undefined : v || null)),
+  unit: z.string().trim().min(1).max(30),
+  quantityOnHand: z.number().int().min(0).max(1_000_000),
+  reorderPoint: z.number().int().min(0).max(1_000_000),
+  maxLevel: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  unitCost: z.number().min(0).max(1_000_000).nullable().optional(),
+  location: z.string().trim().max(100).nullable().optional().transform((v) => (v === undefined ? undefined : v || null)),
+  hotelId: z.string().max(64).min(1),
+  departmentId: z.string().max(64).min(1),
+  categoryId: z.string().max(64).min(1),
 });
+
+// Adding an item: unit, starting stock and reorder point have sensible defaults.
+const createSchema = itemFields.extend({
+  unit: itemFields.shape.unit.default("ea"),
+  quantityOnHand: itemFields.shape.quantityOnHand.default(0),
+  reorderPoint: itemFields.shape.reorderPoint.default(0),
+});
+
+// Editing: everything optional; on-hand quantity only changes through stock transactions.
+const updateSchema = itemFields.omit({ quantityOnHand: true }).partial();
 
 itemsRouter.post(
   "/",
-  requireRole("ADMIN", "MANAGER"),
+  requirePermission("edit_items"),
   asyncHandler(async (req, res) => {
-    const parsed = upsertSchema.safeParse(req.body);
+    const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    if (req.user!.role === "MANAGER") {
+    if (req.user!.role !== "ADMIN") {
       if (parsed.data.hotelId !== req.user!.hotelId) {
-        return res.status(403).json({ error: "Managers may only add items to their own hotel" });
+        return res.status(403).json({ error: "You can only add items to your own hotel" });
       }
       if (parsed.data.departmentId !== req.user!.departmentId) {
-        return res.status(403).json({ error: "Managers may only add items to their own department" });
+        return res.status(403).json({ error: "You can only add items to your own department" });
       }
     }
 
@@ -111,16 +124,15 @@ itemsRouter.post(
 
 itemsRouter.patch(
   "/:id",
-  requireRole("ADMIN", "MANAGER"),
+  requirePermission("edit_items"),
   asyncHandler(async (req, res) => {
-    // On-hand quantity only changes through stock transactions, never a direct edit.
-    const parsed = upsertSchema.omit({ quantityOnHand: true }).partial().safeParse(req.body);
+    const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
     const existing = await prisma.inventoryItem.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: "Item not found" });
 
-    if (req.user!.role === "MANAGER") {
+    if (req.user!.role !== "ADMIN") {
       // A Manager runs one (hotel, department) pair — both must match, or a
       // Housekeeping Manager could edit Engineering's items at the same hotel.
       if (existing.hotelId !== req.user!.hotelId || existing.departmentId !== req.user!.departmentId) {
@@ -128,10 +140,10 @@ itemsRouter.patch(
       }
       // Prevent a Manager from re-homing an item to a hotel or department they don't run.
       if (parsed.data.hotelId && parsed.data.hotelId !== req.user!.hotelId) {
-        return res.status(403).json({ error: "Managers may not move items to another hotel" });
+        return res.status(403).json({ error: "You can't move items to another hotel" });
       }
       if (parsed.data.departmentId && parsed.data.departmentId !== req.user!.departmentId) {
-        return res.status(403).json({ error: "Managers may not move items to another department" });
+        return res.status(403).json({ error: "You can't move items to another department" });
       }
     }
 

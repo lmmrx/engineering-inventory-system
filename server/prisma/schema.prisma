@@ -7,9 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Highest to lowest: each role can manage the ones below it in its own
+// hotel and department (see server/src/lib/permissions.ts).
 enum Role {
   ADMIN
   MANAGER
+  SUPERVISOR
   STAFF
 }
 
@@ -86,7 +89,12 @@ model User {
   // Profile details the user fills in themselves (Settings → Profile).
   position  String?
   phone     String?
-  // Who they report to: an Admin, or a Manager at their hotel.
+  // Features granted on top of what the role allows (e.g. a Staff member who
+  // may approve purchase requests). Only "grantable" features; see lib/permissions.ts.
+  extraPermissions String[] @default([])
+
+  // Who they report to, set when the account is created or by whoever manages
+  // it: an Admin, or a Manager/Supervisor at their hotel ranked above them.
   managerId String?
   manager   User?   @relation("ReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
   reports   User[]  @relation("ReportsTo")

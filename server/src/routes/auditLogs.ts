@@ -2,11 +2,11 @@ import { Request, Router } from "express";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 
 export const auditLogsRouter = Router();
 
-auditLogsRouter.use(requireAuth, requireRole("ADMIN", "MANAGER"));
+auditLogsRouter.use(requireAuth, requirePermission("audit_log"));
 
 const PAGE_SIZE = 50;
 
@@ -20,7 +20,8 @@ export function auditLogWhere(req: Request, period?: { from: Date; to: Date }): 
   const { entityType, actorUserId, q } = req.query;
   const conditions: Prisma.AuditLogWhereInput[] = [];
 
-  if (req.user!.role === "MANAGER") {
+  // Anyone below Admin sees only their own hotel + department.
+  if (req.user!.role !== "ADMIN") {
     conditions.push({
       departmentId: req.user!.departmentId ?? "__none__",
       OR: [{ hotelId: req.user!.hotelId ?? "__none__" }, { hotelId: null }],

@@ -17,6 +17,7 @@ import { workOrdersRouter } from "./routes/workOrders";
 import { requireAuth } from "./middleware/auth";
 import { asyncHandler } from "./lib/asyncHandler";
 import { prisma } from "./lib/prisma";
+import { rateLimit } from "./lib/rateLimit";
 
 export function createApp() {
   const app = express();
@@ -46,6 +47,8 @@ export function createApp() {
   // Standard security headers (nosniff, no framing, HSTS, a deny-all CSP —
   // the API only ever serves JSON).
   app.use(helmet());
+  // Per address: generous, because a whole hotel can share one public IP.
+  app.use(rateLimit({ max: 1500, windowMs: 60_000, key: (req) => req.ip ?? "unknown" }));
   // Photo uploads arrive as base64 text; the browser has already shrunk them,
   // so this route alone gets a little more room than every other request.
   app.use("/me/avatar", express.json({ limit: "400kb" }));
@@ -93,6 +96,10 @@ export function createApp() {
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error(err);
 
+    // A browser page on a site that isn't allowed to use the API.
+    if (err instanceof Error && err.message === "Not allowed by CORS") {
+      return res.status(403).json({ error: "This site isn't allowed to use the API" });
+    }
     if ((err as { type?: string })?.type === "entity.too.large") {
       return res.status(413).json({ error: "That upload is too large — try a smaller photo" });
     }

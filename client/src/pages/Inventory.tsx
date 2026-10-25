@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
-import { useDepartmentScope } from "../context/DepartmentScopeContext";
+import { useScope } from "../hooks/useScope";
 import { Category, InventoryItem, TransactionType } from "../types";
 import { RoleGate } from "../components/RoleGate";
 import { Field, Modal, ModalActions } from "../components/Modal";
@@ -10,22 +9,25 @@ import { useT } from "../i18n";
 
 export function Inventory() {
   const t = useT();
-  const { selectedHotelId } = useHotelScope();
-  const { selectedDepartmentId } = useDepartmentScope();
-  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
+  const { selectedHotelId, selectedDepartmentId, viewingAllHotels, ready, params } = useScope();
   const queryClient = useQueryClient();
   const [showAddItem, setShowAddItem] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [stockModalItem, setStockModalItem] = useState<InventoryItem | null>(null);
 
   const itemsQuery = useQuery({
     queryKey: ["items", selectedHotelId, selectedDepartmentId],
-    queryFn: () => {
-      const params = new URLSearchParams({ departmentId: selectedDepartmentId });
-      if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
-      return api.get<InventoryItem[]>(`/items?${params}`);
-    },
-    enabled: !!selectedHotelId && !!selectedDepartmentId,
+    queryFn: () => api.get<InventoryItem[]>(`/items?${params()}`),
+    enabled: ready,
   });
+
+  // Stock numbers appear on several pages (lists, dashboards, low-stock alerts,
+  // Analytics), so a change refreshes all of them, not just this list.
+  function refreshStock() {
+    for (const key of ["items", "transactions", "dashboard-summary", "my-work", "analytics"]) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
+  }
 
   const categoriesQuery = useQuery({
     queryKey: ["categories", selectedDepartmentId],
@@ -37,7 +39,7 @@ export function Inventory() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-lg font-semibold text-ink-100">{t("nav.inventory")}</h1>
-        <RoleGate roles={["ADMIN", "MANAGER"]}>
+        <RoleGate permission="edit_items">
           {viewingAllHotels ? (
             <span className="text-sm text-ink-500">{t("inv.selectHotel")}</span>
           ) : (
@@ -74,10 +76,17 @@ export function Inventory() {
                 </td>
                 <td className="px-4 py-2 text-ink-500 font-mono">{item.reorderPoint}</td>
                 <td className="px-4 py-2 text-ink-500">{item.location ?? "—"}</td>
-                <td className="px-4 py-2 text-end">
-                  <button onClick={() => setStockModalItem(item)} className="btn-ghost text-xs px-2.5 py-1.5">
-                    {t("inv.adjustStock")}
-                  </button>
+                <td className="px-4 py-2">
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setStockModalItem(item)} className="btn-ghost text-xs px-2.5 py-1.5">
+                      {t("inv.adjustStock")}
+                    </button>
+                    <RoleGate permission="edit_items">
+                      <button onClick={() => setEditingItem(item)} className="btn-ghost text-xs px-2.5 py-1.5">
+                        {t("common.edit")}
+                      </button>
+                    </RoleGate>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -90,15 +99,20 @@ export function Inventory() {
         )}
       </div>
 
-      {showAddItem && (
-        <AddItemModal
+      {(showAddItem || editingItem) && (
+        <ItemModal
+          item={editingItem ?? undefined}
           hotelId={selectedHotelId}
           departmentId={selectedDepartmentId}
           categories={categoriesQuery.data ?? []}
-          onClose={() => setShowAddItem(false)}
-          onCreated={() => {
+          onClose={() => {
             setShowAddItem(false);
-            queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId, selectedDepartmentId] });
+            setEditingItem(null);
+          }}
+          onSaved={() => {
+            setShowAddItem(false);
+            setEditingItem(null);
+            refreshStock();
           }}
         />
       )}
@@ -109,8 +123,7 @@ export function Inventory() {
           onClose={() => setStockModalItem(null)}
           onDone={() => {
             setStockModalItem(null);
-            queryClient.invalidateQueries({ queryKey: ["items", selectedHotelId, selectedDepartmentId] });
-            queryClient.invalidateQueries({ queryKey: ["transactions", selectedHotelId] });
+            refreshStock();
           }}
         />
       )}
@@ -118,55 +131,66 @@ export function Inventory() {
   );
 }
 
-function AddItemModal({
+/** Adds an item, or edits one when `item` is given. On-hand stock only changes through stock movements. */
+function ItemModal({
+  item,
   hotelId,
   departmentId,
   categories,
   onClose,
-  onCreated,
+  onSaved,
 }: {
+  item?: InventoryItem;
   hotelId: string;
   departmentId: string;
   categories: Category[];
   onClose: () => void;
-  onCreated: () => void;
+  onSaved: () => void;
 }) {
   const t = useT();
-  const [name, setName] = useState("");
-  const [sku, setSku] = useState("");
-  const [unit, setUnit] = useState("ea");
+  const editing = !!item;
+  const [name, setName] = useState(item?.name ?? "");
+  const [sku, setSku] = useState(item?.sku ?? "");
+  const [unit, setUnit] = useState(item?.unit ?? "ea");
   const [quantityOnHand, setQuantityOnHand] = useState(0);
-  const [reorderPoint, setReorderPoint] = useState(0);
+  const [reorderPoint, setReorderPoint] = useState(item?.reorderPoint ?? 0);
+  const [maxLevel, setMaxLevel] = useState(item?.maxLevel != null ? String(item.maxLevel) : "");
+  const [unitCost, setUnitCost] = useState(item?.unitCost ?? "");
   // Default to the first selectable option: a childless group, or the first subcategory.
   const firstSelectable =
     categories.find((c) => !c.parentId && !categories.some((child) => child.parentId === c.id)) ??
     categories.find((c) => c.parentId) ??
     categories[0];
-  const [categoryId, setCategoryId] = useState(firstSelectable?.id ?? "");
-  const [location, setLocation] = useState("");
+  const [categoryId, setCategoryId] = useState(item?.categoryId ?? firstSelectable?.id ?? "");
+  const [location, setLocation] = useState(item?.location ?? "");
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post("/items", {
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      const fields = {
         name,
-        sku: sku || undefined,
+        // Blank clears these on an edit.
+        sku: sku.trim() || null,
         unit,
-        quantityOnHand,
         reorderPoint,
+        // Blank clears these optional numbers.
+        maxLevel: maxLevel === "" ? null : Number(maxLevel),
+        unitCost: unitCost === "" ? null : Number(unitCost),
         categoryId,
-        location: location || undefined,
-        hotelId,
-        departmentId,
-      }),
-    onSuccess: onCreated,
+        location: location.trim() || null,
+      };
+      return editing
+        ? api.patch(`/items/${item!.id}`, fields)
+        : api.post("/items", { ...fields, quantityOnHand, hotelId, departmentId });
+    },
+    onSuccess: onSaved,
   });
 
   return (
-    <Modal title={t("inv.addItem")} onClose={onClose}>
+    <Modal title={editing ? t("inv.editTitle", { name: item!.name }) : t("inv.addItem")} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          createMutation.mutate();
+          saveMutation.mutate();
         }}
         className="space-y-3"
       >
@@ -174,12 +198,7 @@ function AddItemModal({
           <input required value={name} onChange={(e) => setName(e.target.value)} className="input-field" />
         </Field>
         <Field label={t("field.category")}>
-          <select
-            required
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="input-field"
-          >
+          <select required value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="input-field">
             {categories
               .filter((c) => !c.parentId)
               .map((group) => {
@@ -208,19 +227,21 @@ function AddItemModal({
             <input value={sku} onChange={(e) => setSku(e.target.value)} className="input-field" />
           </Field>
           <Field label={t("field.unit")}>
-            <input value={unit} onChange={(e) => setUnit(e.target.value)} className="input-field" />
+            <input required value={unit} onChange={(e) => setUnit(e.target.value)} className="input-field" />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t("field.startingQuantity")}>
-            <input
-              type="number"
-              min={0}
-              value={quantityOnHand}
-              onChange={(e) => setQuantityOnHand(Number(e.target.value))}
-              className="input-field"
-            />
-          </Field>
+          {!editing && (
+            <Field label={t("field.startingQuantity")}>
+              <input
+                type="number"
+                min={0}
+                value={quantityOnHand}
+                onChange={(e) => setQuantityOnHand(Number(e.target.value))}
+                className="input-field"
+              />
+            </Field>
+          )}
           <Field label={t("field.reorderPoint")}>
             <input
               type="number"
@@ -230,12 +251,36 @@ function AddItemModal({
               className="input-field"
             />
           </Field>
+          <Field label={t("field.maxLevel")}>
+            <input type="number" min={0} value={maxLevel} onChange={(e) => setMaxLevel(e.target.value)} className="input-field" />
+          </Field>
+          <Field label={t("field.unitCost")}>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={unitCost}
+              onChange={(e) => setUnitCost(e.target.value)}
+              className="input-field"
+            />
+          </Field>
         </div>
         <Field label={t("field.location")}>
           <input value={location} onChange={(e) => setLocation(e.target.value)} className="input-field" />
         </Field>
-        {createMutation.isError && <p className="text-sm text-rose-400">{t("inv.createFailed")}</p>}
-        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel={t("inv.addItem")} />
+        {editing && <p className="text-xs text-ink-500">{t("inv.stockViaMovements")}</p>}
+        {saveMutation.isError && (
+          <p className="text-sm text-rose-400">
+            {saveMutation.error instanceof Error && saveMutation.error.message
+              ? saveMutation.error.message
+              : t("inv.createFailed")}
+          </p>
+        )}
+        <ModalActions
+          onClose={onClose}
+          submitting={saveMutation.isPending}
+          submitLabel={editing ? t("common.saveChanges") : t("inv.addItem")}
+        />
       </form>
     </Modal>
   );

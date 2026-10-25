@@ -214,7 +214,7 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
               ` · ${changes.length === 1 ? t("audit.fieldChanged") : t("audit.fieldsChanged", { count: changes.length })}`}
           </p>
         </div>
-        <span className="hidden sm:inline shrink-0 font-mono text-[11px] text-ink-500 border border-navy-700 rounded px-1.5 py-0.5">
+        <span className="hidden sm:inline shrink-0 font-mono text-[0.6875rem] text-ink-500 border border-navy-700 rounded px-1.5 py-0.5">
           {entry.action}
         </span>
       </button>

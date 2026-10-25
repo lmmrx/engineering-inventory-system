@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import type { Permission } from "./permissions";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -10,7 +11,7 @@ if (JWT_SECRET.length < 32) {
   console.warn("WARNING: JWT_SECRET is shorter than 32 characters. Set a long random value (e.g. `openssl rand -hex 32`).");
 }
 
-export type Role = "ADMIN" | "MANAGER" | "STAFF";
+export type Role = "ADMIN" | "MANAGER" | "SUPERVISOR" | "STAFF";
 
 /** What a signed token carries: just who it is and which session generation. */
 interface TokenClaims {
@@ -28,6 +29,8 @@ export interface AuthTokenPayload {
   role: Role;
   hotelId: string | null;
   departmentId: string | null;
+  /** The role's features plus any granted extras (see lib/permissions.ts). */
+  permissions: Permission[];
 }
 
 export function signToken(user: { id: string; tokenVersion: number }): string {

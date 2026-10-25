@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
-import { useDepartmentScope } from "../context/DepartmentScopeContext";
+import { useScope } from "../hooks/useScope";
 import { WorkOrder, WorkOrderStatus } from "../types";
 import { Modal, ModalActions } from "../components/Modal";
 import { useLocale, useT } from "../i18n";
@@ -16,24 +15,19 @@ const statusColor: Record<WorkOrderStatus, string> = {
 export function WorkOrders() {
   const t = useT();
   const locale = useLocale();
-  const { selectedHotelId } = useHotelScope();
-  const { selectedDepartmentId } = useDepartmentScope();
-  const viewingAllHotels = selectedHotelId === ALL_HOTELS;
+  const { selectedHotelId, selectedDepartmentId, viewingAllHotels, ready, params } = useScope();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
 
   const workOrdersQuery = useQuery({
     queryKey: ["work-orders", selectedHotelId, selectedDepartmentId],
-    queryFn: () => {
-      const params = new URLSearchParams({ departmentId: selectedDepartmentId });
-      if (!viewingAllHotels) params.set("hotelId", selectedHotelId);
-      return api.get<WorkOrder[]>(`/work-orders?${params}`);
-    },
-    enabled: !!selectedHotelId && !!selectedDepartmentId,
+    queryFn: () => api.get<WorkOrder[]>(`/work-orders?${params()}`),
+    enabled: ready,
   });
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: ["work-orders", selectedHotelId, selectedDepartmentId] });
+    // The dashboards count and list work orders too.
+    for (const key of ["work-orders", "my-work", "dashboard-summary"]) queryClient.invalidateQueries({ queryKey: [key] });
   }
 
   const advanceMutation = useMutation({

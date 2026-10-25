@@ -1,11 +1,13 @@
 import type { MessageKey } from "../../i18n";
-import { Role } from "../../types";
+import { CurrentUser, Permission, Role, can } from "../../types";
 
 export interface SettingsItem {
   to: string;
   /** Translation key for the menu label. */
   label: MessageKey;
   roles: Role[];
+  /** Also shown to anyone with this permission, e.g. granted to a Staff member. */
+  permission?: Permission;
 }
 
 export interface SettingsGroup {
@@ -13,7 +15,7 @@ export interface SettingsGroup {
   items: SettingsItem[];
 }
 
-const ALL_ROLES: Role[] = ["ADMIN", "MANAGER", "STAFF"];
+const ALL_ROLES: Role[] = ["ADMIN", "MANAGER", "SUPERVISOR", "STAFF"];
 
 export const SETTINGS_GROUPS: SettingsGroup[] = [
   {
@@ -35,27 +37,29 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
     label: "settings.group.organization",
     items: [
       { to: "organization/hotels", label: "settings.hotels", roles: ["ADMIN"] },
-      { to: "organization/users", label: "settings.users", roles: ["ADMIN", "MANAGER"] },
-      { to: "organization/categories", label: "settings.categories", roles: ["ADMIN", "MANAGER"] },
+      { to: "organization/users", label: "settings.users", roles: [], permission: "manage_staff" },
+      { to: "organization/categories", label: "settings.categories", roles: [], permission: "manage_categories" },
       { to: "organization/departments", label: "settings.departments", roles: ["ADMIN"] },
     ],
   },
   {
     label: "settings.group.access",
-    items: [{ to: "roles", label: "settings.roles", roles: ["ADMIN", "MANAGER"] }],
+    items: [{ to: "roles", label: "settings.roles", roles: ["ADMIN", "MANAGER", "SUPERVISOR"] }],
   },
   {
     label: "settings.group.data",
     items: [
-      { to: "data", label: "settings.export", roles: ["ADMIN", "MANAGER"] },
-      { to: "audit-log", label: "settings.auditLog", roles: ["ADMIN", "MANAGER"] },
+      { to: "data", label: "settings.export", roles: [], permission: "reports" },
+      { to: "audit-log", label: "settings.auditLog", roles: [], permission: "audit_log" },
     ],
   },
 ];
 
-export function settingsGroupsForRole(role: Role): SettingsGroup[] {
+export function settingsGroupsForUser(user: CurrentUser): SettingsGroup[] {
   return SETTINGS_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => item.roles.includes(role)),
+    items: group.items.filter(
+      (item) => item.roles.includes(user.role) || (item.permission !== undefined && can(user, item.permission))
+    ),
   })).filter((group) => group.items.length > 0);
 }

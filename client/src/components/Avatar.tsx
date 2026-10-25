@@ -16,6 +16,7 @@ export function Avatar({
   userId: string;
   name: string;
   version?: number | null;
+  /** Diameter in pixels at the default font size. */
   size?: number;
   className?: string;
 }) {
@@ -27,7 +28,8 @@ export function Avatar({
     retry: false,
   });
 
-  const style = { width: size, height: size, fontSize: Math.round(size * 0.42) };
+  // In rem (16px = 1rem at the default size), so avatars grow with the font-size setting.
+  const style = { width: `${size / 16}rem`, height: `${size / 16}rem`, fontSize: `${(size * 0.42) / 16}rem` };
   if (version && photo.data) {
     return (
       <img

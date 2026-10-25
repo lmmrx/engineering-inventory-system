@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { MessageKey, useT } from "../i18n";
-import { Role } from "../types";
+import { Permission, can } from "../types";
 import { Footer } from "./Footer";
 import { PasswordExpiryBanner } from "./PasswordExpiryBanner";
 import { UserMenu } from "./UserMenu";
@@ -11,7 +11,7 @@ import zsHoldingsLogo from "../assets/logo-zsholdings.png";
 /** Simple 20px outline icons, drawn in the current text color. */
 function Icon({ children }: { children: ReactNode }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
+    <svg width="1.25rem" height="1.25rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="flex-none">
       {children}
     </svg>
@@ -51,20 +51,14 @@ const ICONS = {
       <path d="M4 20V10M10 20V4M16 20v-7M21 20H3" />
     </Icon>
   ),
-  settings: (
-    <Icon>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
-    </Icon>
-  ),
 };
 
-const NAV: { to: string; label: MessageKey; icon: ReactNode; end?: boolean; roles?: Role[] }[] = [
+const NAV: { to: string; label: MessageKey; icon: ReactNode; end?: boolean; permission?: Permission }[] = [
   { to: "/", label: "nav.dashboard", icon: ICONS.dashboard, end: true },
   { to: "/inventory", label: "nav.inventory", icon: ICONS.inventory },
   { to: "/purchase-requests", label: "nav.purchaseRequests", icon: ICONS.purchase },
   { to: "/work-orders", label: "nav.workOrders", icon: ICONS.workOrders },
-  { to: "/analytics", label: "nav.analytics", icon: ICONS.analytics, roles: ["ADMIN", "MANAGER"] },
+  { to: "/analytics", label: "nav.analytics", icon: ICONS.analytics, permission: "view_analytics" },
 ];
 
 // Remembered per browser; storage can be unavailable (private mode), so every access is guarded.
@@ -125,7 +119,7 @@ export function Layout() {
     });
   }
 
-  const links = NAV.filter((item) => !item.roles || (user && item.roles.includes(user.role)));
+  const links = NAV.filter((item) => !item.permission || can(user, item.permission));
 
   /** The sidebar's contents, shared by the desktop sidebar and the phone drawer. */
   function sidebar(compact: boolean, onPhone: boolean) {
@@ -167,12 +161,6 @@ export function Layout() {
             </NavLink>
           ))}
 
-          <div className="my-2 border-t border-navy-800" />
-
-          <NavLink to="/settings" className={linkClass} title={compact ? t("nav.settings") : undefined}>
-            {ICONS.settings}
-            {!compact && <span>{t("nav.settings")}</span>}
-          </NavLink>
         </nav>
 
         <div className={`border-t border-navy-800 py-2 space-y-1 ${compact ? "px-2 flex flex-col items-center" : "px-3"}`}>
