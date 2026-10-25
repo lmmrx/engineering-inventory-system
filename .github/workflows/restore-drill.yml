@@ -1,0 +1,140 @@
+# Quarterly disaster-recovery drill: restores the latest backup into a clean,
+# throwaway environment, brings up the real API on it and smoke-tests it —
+# timing the recovery (RTO) and the data-loss window (RPO). Never touches
+# production.
+#
+# The private decryption key lives only in the "restore-drill" environment.
+# Give that environment required reviewers (Settings → Environments), so the
+# key is only released after an administrator approves the run.
+name: Restore drill
+
+on:
+  schedule:
+    - cron: "23 6 2 1,4,7,10 *" # 06:23 UTC on the 2nd of Jan, Apr, Jul, Oct
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Backup run to restore (blank = latest good backup)"
+        required: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    # Scheduled runs start once setup is done (repository variable BACKUP_ENABLED = true);
+    # running it by hand always works, e.g. to test the setup.
+    if: vars.BACKUP_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 60
+    environment: restore-drill
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the backup
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          echo "DRILL_START=$(date +%s)" >> "$GITHUB_ENV"
+          ID="${RUN_ID:-$(gh run list -R "$REPO" --workflow backup.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')}"
+          [ -n "$ID" ] || { echo "::error::No backup to restore"; exit 1; }
+          gh run download "$ID" -R "$REPO" -D "$RUNNER_TEMP/dl"
+          BACKUP=$(ls "$RUNNER_TEMP"/dl/*/*.dump.age | head -1)
+          echo "BACKUP=$BACKUP" >> "$GITHUB_ENV"
+          echo "Restoring $(basename "$BACKUP") from backup run $ID"
+
+      - name: Install tools and start a clean database
+        run: |
+          MANIFEST="${BACKUP%.dump.age}.manifest.json"
+          MAJOR=$(( $(jq -r .postgresVersion "$MANIFEST") / 10000 ))
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common age > /dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq "postgresql-client-$MAJOR" > /dev/null
+          echo "/usr/lib/postgresql/$MAJOR/bin" >> "$GITHUB_PATH"
+          docker run -d --name drill -p 5434:5432 -e POSTGRES_PASSWORD=drill "postgres:$MAJOR" > /dev/null
+          for i in $(seq 1 30); do docker exec drill pg_isready -q && break; sleep 1; done
+
+      - name: Decrypt, restore and verify
+        env:
+          IDENTITY: ${{ secrets.BACKUP_AGE_IDENTITY }}
+          TARGET_DATABASE_URL: postgresql://postgres:drill@localhost:5434/postgres
+        run: |
+          [ -n "$IDENTITY" ] || { echo "::error::Secret BACKUP_AGE_IDENTITY is not set in the restore-drill environment"; exit 1; }
+          KEY="$RUNNER_TEMP/identity.txt"
+          ( umask 077; printf '%s\n' "$IDENTITY" > "$KEY" )
+          bash ops/backup/restore.sh "$BACKUP" "$KEY"
+          rm -f "$KEY"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Bring the app up on the restored data
+        env:
+          DATABASE_URL: postgresql://postgres:drill@localhost:5434/postgres?schema=public
+        run: |
+          npm ci --no-audit --no-fund > /dev/null
+          # A backup can be older than the code: apply newer migrations, as a real redeploy would.
+          npx prisma migrate deploy --schema=server/prisma/schema.prisma
+          npm run build --workspace server > /dev/null
+          SECRET=$(openssl rand -hex 32)
+          echo "::add-mask::$SECRET"
+          echo "DRILL_JWT_SECRET=$SECRET" >> "$GITHUB_ENV"
+          JWT_SECRET="$SECRET" PORT=4000 CLIENT_ORIGIN=http://localhost node server/dist/index.js > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fs localhost:4000/health/db > /dev/null && break; sleep 1; done
+
+      - name: Smoke-test the restored app
+        env:
+          PGURL: postgresql://postgres:drill@localhost:5434/postgres
+        run: |
+          ADMIN=$(psql "$PGURL" -Atqc "select id || '|' || \"tokenVersion\" from \"User\" where role = 'ADMIN' and \"disabledAt\" is null limit 1")
+          PHOTO=$(psql "$PGURL" -Atqc 'select "userId" from "UserAvatar" limit 1')
+          API_URL=http://localhost:4000 JWT_SECRET="$DRILL_JWT_SECRET" ADMIN_ID="${ADMIN%|*}" ADMIN_TV="${ADMIN#*|}" \
+            AVATAR_USER_ID="$PHOTO" node ops/backup/smoke-test.cjs | tee "$RUNNER_TEMP/smoke.txt"
+
+      - name: Drill report
+        if: always()
+        run: |
+          MANIFEST="${BACKUP%.dump.age}.manifest.json"
+          REPORT="$RUNNER_TEMP/dr-drill-$(date -u +%Y-%m-%d).md"
+          if [ -f "$MANIFEST" ]; then
+            CREATED=$(jq -r .createdAt "$MANIFEST")
+            LOSS_MIN=$(( ( $(date +%s) - $(date -d "$CREATED" +%s) ) / 60 ))
+          fi
+          {
+            echo "## Restore drill — $(date -u +%Y-%m-%d)"
+            echo "- Result: **${{ job.status }}**"
+            echo "- Backup restored: $(basename "${BACKUP:-none}") (taken ${CREATED:-?})"
+            echo "- Recovery time, download to working app: $(( ( $(date +%s) - ${DRILL_START:-$(date +%s)} ) / 60 )) min (target: 4 h)"
+            echo "- Data-loss window had this been a real disaster now: ${LOSS_MIN:-?} min from this backup alone; Neon point-in-time restore narrows this to minutes"
+            echo "- App version tested: ${{ github.sha }}"
+            echo ""
+            echo '```'
+            cat "$RUNNER_TEMP/smoke.txt" 2>/dev/null || echo "(smoke test did not run)"
+            echo '```'
+          } | tee "$REPORT" >> "$GITHUB_STEP_SUMMARY"
+          echo "REPORT=$REPORT" >> "$GITHUB_ENV"
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-drill-report-${{ github.run_id }}
+          path: ${{ env.REPORT }}
+          retention-days: 90
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.BACKUP_ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MSG="ZS Holdings Inventory: restore drill FAILED — backups may not be restorable. $RUN_URL"
+          [ -n "$WEBHOOK" ] && curl -fsS -X POST -H "Content-Type: application/json" \
+            -d "{\"text\":\"$MSG\",\"content\":\"$MSG\"}" "$WEBHOOK" > /dev/null || true
+          echo "::error::$MSG"

@@ -1,0 +1,77 @@
+# Watches the backups from outside the app, every hour: alerts if the last
+# good backup is too old, if its files are missing or empty, or if optional
+# object storage is filling up. Runs on GitHub, so it keeps working even when
+# the app (Render) or the database (Neon) is down.
+name: Backup monitor
+
+on:
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read # to look at backup runs and their artifacts; nothing else
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # Scheduled runs start once setup is done (repository variable BACKUP_ENABLED = true);
+    # running it by hand always works, e.g. to test the setup.
+    if: vars.BACKUP_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 10
+    steps:
+      - name: Last good backup is recent and complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # Backups run every 4 hours; allow one missed run before alerting.
+          MAX_AGE_HOURS: ${{ vars.BACKUP_MAX_AGE_HOURS || '9' }}
+        run: |
+          RUN=$(gh run list -R "$REPO" --workflow backup.yml --status success --limit 1 --json databaseId,createdAt -q '.[0]')
+          [ -n "$RUN" ] || { echo "::error::No successful backup has ever run"; exit 1; }
+          ID=$(echo "$RUN" | jq -r .databaseId)
+          AGE_H=$(( ( $(date +%s) - $(date -d "$(echo "$RUN" | jq -r .createdAt)" +%s) ) / 3600 ))
+          echo "Last good backup: run $ID, ${AGE_H}h ago"
+          [ "$AGE_H" -le "$MAX_AGE_HOURS" ] || { echo "::error::Last good backup is ${AGE_H}h old (limit ${MAX_AGE_HOURS}h)"; exit 1; }
+          # Its encrypted backup must still be stored, and not empty.
+          SIZE=$(gh api "repos/$REPO/actions/runs/$ID/artifacts" -q '[.artifacts[] | select(.expired == false) | .size_in_bytes] | add // 0')
+          [ "$SIZE" -gt 0 ] || { echo "::error::The last good backup's files are missing or empty"; exit 1; }
+          echo "Stored: $SIZE bytes"
+          # Failures since then are worth knowing about even when an older run succeeded.
+          FAILED=$(gh run list -R "$REPO" --workflow backup.yml --status failure --limit 1 --json createdAt -q '.[0].createdAt // empty')
+          if [ -n "$FAILED" ] && [ "$(date -d "$FAILED" +%s)" -gt "$(date -d "$(echo "$RUN" | jq -r .createdAt)" +%s)" ]; then
+            echo "::error::The most recent backup attempt failed (at $FAILED)"; exit 1
+          fi
+          echo "### Backups healthy — last good backup ${AGE_H}h ago, ${SIZE} bytes stored" >> "$GITHUB_STEP_SUMMARY"
+
+      # Optional: only when a bucket is configured. Uses a separate read-only
+      # key that can list objects but not change or delete them.
+      - name: Object storage has a recent copy and room to spare
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_MONITOR_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_MONITOR_SECRET }}
+          AWS_DEFAULT_REGION: ${{ vars.BACKUP_S3_REGION || 'us-east-1' }}
+          ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT }}
+          BUCKET: ${{ vars.BACKUP_S3_BUCKET }}
+          WARN_GB: ${{ vars.BACKUP_STORAGE_WARN_GB || '8' }}
+        run: |
+          if [ -z "$BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ]; then echo "No bucket configured — skipped."; exit 0; fi
+          LIST=$(aws s3api list-objects-v2 --endpoint-url "$ENDPOINT" --bucket "$BUCKET" --output json)
+          NEWEST=$(echo "$LIST" | jq -r '[.Contents[]? | select(.Key | startswith("4-hourly/")) | .LastModified] | max // empty')
+          [ -n "$NEWEST" ] || { echo "::error::No backups found in the bucket"; exit 1; }
+          AGE_H=$(( ( $(date +%s) - $(date -d "$NEWEST" +%s) ) / 3600 ))
+          [ "$AGE_H" -le 9 ] || { echo "::error::Newest bucket copy is ${AGE_H}h old"; exit 1; }
+          BYTES=$(echo "$LIST" | jq '[.Contents[]?.Size] | add // 0')
+          echo "Bucket: newest copy ${AGE_H}h old, $(( BYTES / 1048576 )) MB used"
+          [ "$BYTES" -lt $(( WARN_GB * 1073741824 )) ] || { echo "::error::Backup storage over ${WARN_GB} GB — check retention or the free-tier limit"; exit 1; }
+
+      - name: Alert
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.BACKUP_ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MSG="ZS Holdings Inventory: backups need attention (overdue, failed or unverifiable). $RUN_URL"
+          [ -n "$WEBHOOK" ] && curl -fsS -X POST -H "Content-Type: application/json" \
+            -d "{\"text\":\"$MSG\",\"content\":\"$MSG\"}" "$WEBHOOK" > /dev/null || true
+          echo "::error::$MSG"

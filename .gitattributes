@@ -1,0 +1,2 @@
+# Shell scripts must keep Linux line endings to run on GitHub runners, WSL and Git Bash.
+*.sh text eol=lf

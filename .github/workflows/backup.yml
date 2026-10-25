@@ -1,0 +1,155 @@
+# Verified, encrypted, off-site database backups — every 4 hours, free.
+#
+# Runs on GitHub's servers, not on Render, so it keeps working when the app
+# is down. Neon's own point-in-time restore covers the minutes in between
+# (RPO ≤ 15 min); these copies cover everything Neon can't: a deleted Neon
+# project, a compromised account, or history older than Neon keeps.
+#
+# Setup (once): docs/backup-and-disaster-recovery.md → "One-time setup".
+name: Database backup
+
+on:
+  schedule:
+    - cron: "17 */4 * * *" # every 4 hours, at :17 past
+  workflow_dispatch:
+
+# The job can read the code and nothing else; backups go out as artifacts.
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    # Scheduled runs start once setup is done (repository variable BACKUP_ENABLED = true);
+    # running it by hand always works, e.g. to test the setup.
+    if: vars.BACKUP_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+    # Holds the backup credentials; restrict it to the master branch in
+    # Settings → Environments so no other branch can read them.
+    environment: backup
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check configuration
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+        run: |
+          [ -n "$BACKUP_DATABASE_URL" ] || { echo "::error::Secret BACKUP_DATABASE_URL is not set (see docs/backup-and-disaster-recovery.md)"; exit 1; }
+          [ -n "$BACKUP_AGE_RECIPIENT" ] || { echo "::error::Variable BACKUP_AGE_RECIPIENT (the backup public key) is not set"; exit 1; }
+
+      - name: Install PostgreSQL client matching the database, and age
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common age > /dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          MAJOR=$(( $(psql "$BACKUP_DATABASE_URL" -Atqc 'show server_version_num') / 10000 ))
+          sudo apt-get install -y -qq "postgresql-client-$MAJOR" > /dev/null
+          echo "/usr/lib/postgresql/$MAJOR/bin" >> "$GITHUB_PATH"
+          echo "PG_MAJOR=$MAJOR" >> "$GITHUB_ENV"
+
+      - name: Start a scratch database for the restore test
+        run: |
+          docker run -d --name verify -p 5433:5432 -e POSTGRES_PASSWORD=verify "postgres:$PG_MAJOR" > /dev/null
+          for i in $(seq 1 30); do docker exec verify pg_isready -q && break; sleep 1; done
+
+      - name: Back up, test-restore, verify and encrypt
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_AGE_RECIPIENT: ${{ vars.BACKUP_AGE_RECIPIENT }}
+          VERIFY_DATABASE_URL: postgresql://postgres:verify@localhost:5433/postgres
+          OUT_DIR: ${{ runner.temp }}/backup
+          APP_VERSION: ${{ github.sha }}
+        run: bash ops/backup/backup.sh
+
+      # Grandfather-father-son: every backup is kept a week; the first of each
+      # day five weeks; Sunday's and the 1st of the month's for longer.
+      - name: Decide retention
+        id: tier
+        run: |
+          HOUR=$(date -u +%-H); DOW=$(date -u +%u); DOM=$(date -u +%-d)
+          TIERS="4-hourly"; DAYS=7
+          if [ "$HOUR" -lt 4 ]; then TIERS="$TIERS daily"; DAYS=35
+            [ "$DOW" = 7 ] && { TIERS="$TIERS weekly"; DAYS=91; }
+            [ "$DOM" = 1 ] && { TIERS="$TIERS monthly"; DAYS=395; }
+          fi
+          # GitHub keeps artifacts at most 90 days; longer copies need the optional bucket.
+          echo "tiers=$TIERS" >> "$GITHUB_OUTPUT"
+          echo "artifact_days=$(( DAYS > 90 ? 90 : DAYS ))" >> "$GITHUB_OUTPUT"
+          echo "name=$(cat "$RUNNER_TEMP/backup/LATEST")" >> "$GITHUB_OUTPUT"
+
+      - name: Store encrypted backup off-site (GitHub)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.tier.outputs.name }}
+          path: ${{ runner.temp }}/backup/${{ steps.tier.outputs.name }}.*
+          retention-days: ${{ steps.tier.outputs.artifact_days }}
+          if-no-files-found: error
+          compression-level: 0 # already compressed and encrypted
+
+      # Optional second copy with Object Lock (tamper-proof until it expires),
+      # e.g. Backblaze B2's free 10 GB with its spending cap at $0. Skipped
+      # unless the BACKUP_S3_* settings exist. The key used here can upload
+      # but not list or delete.
+      - name: Store locked copy in object storage (optional)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ vars.BACKUP_S3_REGION || 'us-east-1' }}
+          ENDPOINT: ${{ vars.BACKUP_S3_ENDPOINT }}
+          BUCKET: ${{ vars.BACKUP_S3_BUCKET }}
+          NAME: ${{ steps.tier.outputs.name }}
+          TIERS: ${{ steps.tier.outputs.tiers }}
+        run: |
+          if [ -z "$BUCKET" ] || [ -z "$AWS_ACCESS_KEY_ID" ]; then
+            echo "No bucket configured — the GitHub copy is the off-site backup."; exit 0
+          fi
+          for tier in $TIERS; do
+            case "$tier" in 4-hourly) DAYS=7;; daily) DAYS=35;; weekly) DAYS=91;; monthly) DAYS=395;; esac
+            UNTIL=$(date -u -d "+$DAYS days" +%Y-%m-%dT%H:%M:%SZ)
+            for f in "$RUNNER_TEMP/backup/$NAME".*; do
+              aws s3api put-object --endpoint-url "$ENDPOINT" --bucket "$BUCKET" \
+                --key "$tier/$(basename "$f")" --body "$f" --content-md5 "$(openssl md5 -binary "$f" | base64)" \
+                --object-lock-mode COMPLIANCE --object-lock-retain-until-date "$UNTIL" > /dev/null
+            done
+            echo "Locked $tier copy until $UNTIL"
+          done
+
+      # Optional "dead man's switch" (e.g. Healthchecks.io, free): it emails you
+      # when these pings STOP — catching what GitHub can't report itself, such
+      # as scheduled runs being paused after 60 days without repo activity.
+      - name: Heartbeat
+        env:
+          HEARTBEAT_URL: ${{ secrets.BACKUP_HEARTBEAT_URL }}
+        run: '[ -z "$HEARTBEAT_URL" ] || curl -fsS -m 10 --retry 3 "$HEARTBEAT_URL" > /dev/null'
+
+      - name: Summary
+        if: always()
+        run: |
+          M=$(ls "$RUNNER_TEMP"/backup/*.manifest.json 2>/dev/null | head -1)
+          {
+            echo "### Database backup"
+            if [ -n "$M" ]; then
+              python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(f"- **{m[\"backup\"]}** — {m[\"encryptedBytes\"]:,} bytes, verified, {m[\"tables\"]} tables, app {m[\"appVersion\"][:7]}")' "$M"
+              echo "- Kept as: ${{ steps.tier.outputs.tiers }}"
+            else
+              echo "- No backup was produced. See the log above."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Alert on failure
+        if: failure()
+        env:
+          WEBHOOK: ${{ secrets.BACKUP_ALERT_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MSG="ZS Holdings Inventory: database backup FAILED. $RUN_URL"
+          [ -n "$WEBHOOK" ] && curl -fsS -X POST -H "Content-Type: application/json" \
+            -d "{\"text\":\"$MSG\",\"content\":\"$MSG\"}" "$WEBHOOK" > /dev/null || true
+          echo "::error::$MSG"
