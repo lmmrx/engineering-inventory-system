@@ -6,6 +6,7 @@ import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { InventoryItem, PurchaseRequest } from "../types";
 import { RoleGate } from "../components/RoleGate";
 import { Modal, ModalActions } from "../components/Modal";
+import { useLocale, useT } from "../i18n";
 
 const statusColor: Record<string, string> = {
   PENDING: "bg-amber-500/15 text-amber-300",
@@ -15,6 +16,8 @@ const statusColor: Record<string, string> = {
 };
 
 export function PurchaseRequests() {
+  const t = useT();
+  const locale = useLocale();
   const { selectedHotelId } = useHotelScope();
   const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
@@ -46,7 +49,7 @@ export function PurchaseRequests() {
   }
 
   function handleActionError(err: unknown) {
-    setActionError(err instanceof Error ? err.message : "Something went wrong.");
+    setActionError(err instanceof Error && err.message ? err.message : t("common.somethingWrong"));
   }
 
   const approveMutation = useMutation({
@@ -83,12 +86,12 @@ export function PurchaseRequests() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold text-ink-100">Purchase Requests</h1>
+        <h1 className="text-lg font-semibold text-ink-100">{t("nav.purchaseRequests")}</h1>
         {viewingAllHotels ? (
-          <span className="text-sm text-ink-500">Select a specific hotel to create a request</span>
+          <span className="text-sm text-ink-500">{t("pr.selectHotel")}</span>
         ) : (
           <button onClick={() => setShowCreate(true)} className="btn-primary">
-            New request
+            {t("pr.new")}
           </button>
         )}
       </div>
@@ -101,10 +104,10 @@ export function PurchaseRequests() {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor[pr.status]}`}>
-                  {pr.status}
+                  {t(`pr.status.${pr.status}`)}
                 </span>
                 <span className="text-sm text-ink-500">
-                  Requested by {pr.requestedBy?.name} on {new Date(pr.createdAt).toLocaleDateString()}
+                  {t("pr.requestedBy", { name: pr.requestedBy?.name ?? "", date: new Date(pr.createdAt).toLocaleDateString(locale) })}
                   {viewingAllHotels && pr.hotel && (
                     <span className="font-mono"> · {pr.hotel.code}</span>
                   )}
@@ -117,13 +120,13 @@ export function PurchaseRequests() {
                       onClick={() => approveMutation.mutate(pr.id)}
                       className="text-xs px-2 py-1 rounded-md border border-emerald-700/60 text-emerald-300 hover:bg-emerald-500/10"
                     >
-                      Approve
+                      {t("pr.approve")}
                     </button>
                     <button
                       onClick={() => rejectMutation.mutate(pr.id)}
                       className="text-xs px-2 py-1 rounded-md border border-rose-700/60 text-rose-300 hover:bg-rose-500/10"
                     >
-                      Reject
+                      {t("pr.reject")}
                     </button>
                   </div>
                 )}
@@ -132,7 +135,7 @@ export function PurchaseRequests() {
                     onClick={() => receiveMutation.mutate(pr)}
                     className="text-xs px-2 py-1 rounded-md border border-blue-700/60 text-blue-300 hover:bg-blue-500/10"
                   >
-                    Mark received
+                    {t("pr.markReceived")}
                   </button>
                 )}
               </RoleGate>
@@ -140,8 +143,8 @@ export function PurchaseRequests() {
             <ul className="text-sm text-ink-300 space-y-1">
               {pr.items.map((line) => (
                 <li key={line.id}>
-                  {line.item?.name ?? line.itemId} — {line.quantityRequested} requested
-                  {line.quantityReceived > 0 && `, ${line.quantityReceived} received`}
+                  {t("pr.lineRequested", { item: line.item?.name ?? line.itemId, count: line.quantityRequested })}
+                  {line.quantityReceived > 0 && t("pr.lineReceived", { count: line.quantityReceived })}
                 </li>
               ))}
             </ul>
@@ -150,7 +153,7 @@ export function PurchaseRequests() {
         ))}
         {requestsQuery.data?.length === 0 && (
           <p className="text-sm text-ink-500">
-            {viewingAllHotels ? "No purchase requests across any hotel yet." : "No purchase requests for this hotel yet."}
+            {viewingAllHotels ? t("pr.emptyAll") : t("pr.emptyHotel")}
           </p>
         )}
       </div>
@@ -184,6 +187,7 @@ function CreateRequestModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const t = useT();
   const [lines, setLines] = useState<{ itemId: string; quantityRequested: number }[]>([
     { itemId: items[0]?.id ?? "", quantityRequested: 1 },
   ]);
@@ -208,16 +212,16 @@ function CreateRequestModal({
 
   if (items.length === 0) {
     return (
-      <Modal title="New purchase request" onClose={onClose} maxWidth="max-w-lg">
+      <Modal title={t("pr.newTitle")} onClose={onClose} maxWidth="max-w-lg">
         <p className="text-sm text-ink-300">
-          This hotel doesn't have any inventory items yet, so there's nothing to request.
+          {t("pr.noItems")}
         </p>
         <p className="text-sm text-ink-500 mt-2">
-          Add items on the Inventory page first, then come back to submit a request.
+          {t("pr.noItemsHint")}
         </p>
         <div className="flex justify-end pt-4">
           <button onClick={onClose} className="btn-ghost">
-            Close
+            {t("common.close")}
           </button>
         </div>
       </Modal>
@@ -225,7 +229,7 @@ function CreateRequestModal({
   }
 
   return (
-    <Modal title="New purchase request" onClose={onClose} maxWidth="max-w-lg">
+    <Modal title={t("pr.newTitle")} onClose={onClose} maxWidth="max-w-lg">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -261,17 +265,17 @@ function CreateRequestModal({
           onClick={() => setLines((prev) => [...prev, { itemId: items[0]?.id ?? "", quantityRequested: 1 }])}
           className="text-sm text-gold-400 hover:text-gold-300 underline"
         >
-          + Add another item
+          {t("pr.addLine")}
         </button>
 
         <label className="block">
-          <span className="label-field">Notes (optional)</span>
+          <span className="label-field">{t("field.notes")}</span>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} className="input-field" />
         </label>
 
         {errorMessage && <p className="text-sm text-rose-400">{errorMessage}</p>}
 
-        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel="Submit request" />
+        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel={t("pr.submit")} />
       </form>
     </Modal>
   );

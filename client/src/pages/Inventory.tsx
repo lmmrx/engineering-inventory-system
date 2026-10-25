@@ -6,8 +6,10 @@ import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { Category, InventoryItem, TransactionType } from "../types";
 import { RoleGate } from "../components/RoleGate";
 import { Field, Modal, ModalActions } from "../components/Modal";
+import { useT } from "../i18n";
 
 export function Inventory() {
+  const t = useT();
   const { selectedHotelId } = useHotelScope();
   const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
@@ -34,13 +36,13 @@ export function Inventory() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold text-ink-100">Inventory</h1>
+        <h1 className="text-lg font-semibold text-ink-100">{t("nav.inventory")}</h1>
         <RoleGate roles={["ADMIN", "MANAGER"]}>
           {viewingAllHotels ? (
-            <span className="text-sm text-ink-500">Select a specific hotel to add items</span>
+            <span className="text-sm text-ink-500">{t("inv.selectHotel")}</span>
           ) : (
             <button onClick={() => setShowAddItem(true)} className="btn-primary">
-              Add item
+              {t("inv.addItem")}
             </button>
           )}
         </RoleGate>
@@ -50,12 +52,12 @@ export function Inventory() {
         <table className="w-full text-sm">
           <thead className="table-head-row">
             <tr>
-              <th className="px-4 py-2">Name</th>
-              {viewingAllHotels && <th className="px-4 py-2">Hotel</th>}
-              <th className="px-4 py-2">Category</th>
-              <th className="px-4 py-2">On hand</th>
-              <th className="px-4 py-2">Reorder pt.</th>
-              <th className="px-4 py-2">Location</th>
+              <th className="px-4 py-2">{t("inv.col.name")}</th>
+              {viewingAllHotels && <th className="px-4 py-2">{t("inv.col.hotel")}</th>}
+              <th className="px-4 py-2">{t("inv.col.category")}</th>
+              <th className="px-4 py-2">{t("inv.col.onHand")}</th>
+              <th className="px-4 py-2">{t("inv.col.reorderPoint")}</th>
+              <th className="px-4 py-2">{t("inv.col.location")}</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -72,9 +74,9 @@ export function Inventory() {
                 </td>
                 <td className="px-4 py-2 text-ink-500 font-mono">{item.reorderPoint}</td>
                 <td className="px-4 py-2 text-ink-500">{item.location ?? "—"}</td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-end">
                   <button onClick={() => setStockModalItem(item)} className="btn-ghost text-xs px-2.5 py-1.5">
-                    Adjust stock
+                    {t("inv.adjustStock")}
                   </button>
                 </td>
               </tr>
@@ -83,7 +85,7 @@ export function Inventory() {
         </table>
         {itemsQuery.data?.length === 0 && (
           <p className="text-sm text-ink-500 p-4">
-            {viewingAllHotels ? "No items yet across any hotel." : "No items yet for this hotel."}
+            {viewingAllHotels ? t("inv.emptyAll") : t("inv.emptyHotel")}
           </p>
         )}
       </div>
@@ -129,6 +131,7 @@ function AddItemModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const t = useT();
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [unit, setUnit] = useState("ea");
@@ -159,7 +162,7 @@ function AddItemModal({
   });
 
   return (
-    <Modal title="Add item" onClose={onClose}>
+    <Modal title={t("inv.addItem")} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -167,10 +170,10 @@ function AddItemModal({
         }}
         className="space-y-3"
       >
-        <Field label="Name">
+        <Field label={t("field.name")}>
           <input required value={name} onChange={(e) => setName(e.target.value)} className="input-field" />
         </Field>
-        <Field label="Category">
+        <Field label={t("field.category")}>
           <select
             required
             value={categoryId}
@@ -201,15 +204,15 @@ function AddItemModal({
           </select>
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="SKU (optional)">
+          <Field label={t("field.sku")}>
             <input value={sku} onChange={(e) => setSku(e.target.value)} className="input-field" />
           </Field>
-          <Field label="Unit">
+          <Field label={t("field.unit")}>
             <input value={unit} onChange={(e) => setUnit(e.target.value)} className="input-field" />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Starting quantity">
+          <Field label={t("field.startingQuantity")}>
             <input
               type="number"
               min={0}
@@ -218,7 +221,7 @@ function AddItemModal({
               className="input-field"
             />
           </Field>
-          <Field label="Reorder point">
+          <Field label={t("field.reorderPoint")}>
             <input
               type="number"
               min={0}
@@ -228,17 +231,18 @@ function AddItemModal({
             />
           </Field>
         </div>
-        <Field label="Location (optional)">
+        <Field label={t("field.location")}>
           <input value={location} onChange={(e) => setLocation(e.target.value)} className="input-field" />
         </Field>
-        {createMutation.isError && <p className="text-sm text-rose-400">Could not create item.</p>}
-        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel="Add item" />
+        {createMutation.isError && <p className="text-sm text-rose-400">{t("inv.createFailed")}</p>}
+        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel={t("inv.addItem")} />
       </form>
     </Modal>
   );
 }
 
 function StockModal({ item, onClose, onDone }: { item: InventoryItem; onClose: () => void; onDone: () => void }) {
+  const t = useT();
   const [type, setType] = useState<TransactionType>("RECEIVE");
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
@@ -249,7 +253,7 @@ function StockModal({ item, onClose, onDone }: { item: InventoryItem; onClose: (
   });
 
   return (
-    <Modal title={`Adjust stock · ${item.name}`} onClose={onClose}>
+    <Modal title={t("inv.adjustTitle", { name: item.name })} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -258,20 +262,20 @@ function StockModal({ item, onClose, onDone }: { item: InventoryItem; onClose: (
         className="space-y-3"
       >
         <p className="text-sm text-ink-500">
-          Currently {item.quantityOnHand} {item.unit} on hand.
+          {t("inv.currently", { quantity: item.quantityOnHand, unit: item.unit })}
         </p>
-        <Field label="Type">
+        <Field label={t("field.type")}>
           <select
             value={type}
             onChange={(e) => setType(e.target.value as TransactionType)}
             className="input-field"
           >
-            <option value="RECEIVE">Receive (stock in)</option>
-            <option value="ISSUE">Issue (stock out)</option>
-            <option value="ADJUSTMENT">Adjustment (+/-)</option>
+            <option value="RECEIVE">{t("inv.typeReceive")}</option>
+            <option value="ISSUE">{t("inv.typeIssue")}</option>
+            <option value="ADJUSTMENT">{t("inv.typeAdjust")}</option>
           </select>
         </Field>
-        <Field label={type === "ADJUSTMENT" ? "Delta (use negative to reduce)" : "Quantity"}>
+        <Field label={type === "ADJUSTMENT" ? t("field.delta") : t("field.quantity")}>
           <input
             type="number"
             value={quantity}
@@ -279,11 +283,15 @@ function StockModal({ item, onClose, onDone }: { item: InventoryItem; onClose: (
             className="input-field"
           />
         </Field>
-        <Field label="Notes (optional)">
+        <Field label={t("field.notes")}>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} className="input-field" />
         </Field>
-        {mutation.isError && <p className="text-sm text-rose-400">Could not save transaction.</p>}
-        <ModalActions onClose={onClose} submitting={mutation.isPending} submitLabel="Save" />
+        {mutation.isError && (
+          <p className="text-sm text-rose-400">
+            {mutation.error instanceof Error && mutation.error.message ? mutation.error.message : t("inv.saveFailed")}
+          </p>
+        )}
+        <ModalActions onClose={onClose} submitting={mutation.isPending} submitLabel={t("common.save")} />
       </form>
     </Modal>
   );

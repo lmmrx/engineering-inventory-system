@@ -290,6 +290,7 @@ function movementSummary(
     date: m.createdAt,
     itemId: item.id,
     itemName: item.name,
+    unit: item.unit,
     hotelCode: item.hotel.code,
     quantity: m.quantity,
     performedBy: m.performedBy.name,

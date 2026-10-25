@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useT } from "../i18n";
+import { Avatar } from "./Avatar";
 import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { useDepartmentScope } from "../context/DepartmentScopeContext";
 
@@ -77,7 +78,6 @@ export function UserMenu({
 
   if (!user) return null;
 
-  const initial = user.name.trim().charAt(0).toUpperCase() || "?";
   const currentHotelCode =
     selectedHotelId === ALL_HOTELS ? t("menu.allHotels") : hotels.find((h) => h.id === selectedHotelId)?.code ?? "—";
   const currentDepartmentName = departments.find((d) => d.id === selectedDepartmentId)?.name ?? "—";
@@ -101,9 +101,7 @@ export function UserMenu({
           aria-label={t("menu.account")}
           aria-expanded={open}
         >
-          <span className="h-8 w-8 rounded-full bg-gold-500 text-white text-sm font-semibold flex items-center justify-center flex-none">
-            {initial}
-          </span>
+          <Avatar userId={user.id} name={user.name} version={user.avatarVersion} size={32} />
           <span className="min-w-0 flex-1">
             <span className="block text-sm text-ink-100 truncate">{user.name}</span>
             <span className="block text-xs text-ink-500 truncate">
@@ -115,12 +113,12 @@ export function UserMenu({
       ) : (
         <button
           onClick={() => setOpen((v) => !v)}
-          className="h-8 w-8 rounded-full bg-gold-500 text-white text-sm font-semibold flex items-center justify-center hover:bg-gold-600 transition flex-none"
+          className="rounded-full flex-none hover:opacity-90 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-500/50"
           aria-label={t("menu.account")}
           aria-expanded={open}
           title={compact ? `${user.name} · ${currentDepartmentName} · ${currentHotelCode}` : undefined}
         >
-          {initial}
+          <Avatar userId={user.id} name={user.name} version={user.avatarVersion} size={32} />
         </button>
       )}
 
@@ -130,9 +128,12 @@ export function UserMenu({
             placement === "sidebar" ? "start-0 bottom-full mb-2" : "end-0 top-full mt-2"
           } w-72 max-w-[calc(100vw-2rem)] card shadow-2xl shadow-black/50 py-1.5 z-30`}
         >
-          <div className="px-3 py-2 border-b border-navy-800 mb-1">
-            <p className="text-sm font-medium text-ink-100 truncate">{user.name}</p>
-            <p className="text-xs text-ink-500 truncate">{user.email}</p>
+          <div className="px-3 py-2 border-b border-navy-800 mb-1 flex items-center gap-2.5">
+            <Avatar userId={user.id} name={user.name} version={user.avatarVersion} size={36} />
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink-100 truncate">{user.name}</p>
+              <p className="text-xs text-ink-500 truncate">{user.position || user.email}</p>
+            </div>
           </div>
 
           {panel === "main" && (

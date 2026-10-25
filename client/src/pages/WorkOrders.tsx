@@ -5,6 +5,7 @@ import { ALL_HOTELS, useHotelScope } from "../context/HotelScopeContext";
 import { useDepartmentScope } from "../context/DepartmentScopeContext";
 import { WorkOrder, WorkOrderStatus } from "../types";
 import { Modal, ModalActions } from "../components/Modal";
+import { useLocale, useT } from "../i18n";
 
 const statusColor: Record<WorkOrderStatus, string> = {
   OPEN: "bg-amber-500/15 text-amber-300",
@@ -13,6 +14,8 @@ const statusColor: Record<WorkOrderStatus, string> = {
 };
 
 export function WorkOrders() {
+  const t = useT();
+  const locale = useLocale();
   const { selectedHotelId } = useHotelScope();
   const { selectedDepartmentId } = useDepartmentScope();
   const viewingAllHotels = selectedHotelId === ALL_HOTELS;
@@ -48,12 +51,12 @@ export function WorkOrders() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold text-ink-100">Work Orders</h1>
+        <h1 className="text-lg font-semibold text-ink-100">{t("nav.workOrders")}</h1>
         {viewingAllHotels ? (
-          <span className="text-sm text-ink-500">Select a specific hotel to create a work order</span>
+          <span className="text-sm text-ink-500">{t("wo.selectHotel")}</span>
         ) : (
           <button onClick={() => setShowCreate(true)} className="btn-primary">
-            New work order
+            {t("wo.new")}
           </button>
         )}
       </div>
@@ -66,7 +69,7 @@ export function WorkOrders() {
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor[wo.status]}`}>
-                    {wo.status.replace("_", " ")}
+                    {t(`wo.status.${wo.status}`)}
                   </span>
                   <span className="font-medium text-ink-100">{wo.title}</span>
                 </div>
@@ -75,14 +78,14 @@ export function WorkOrders() {
                     onClick={() => advanceMutation.mutate({ id: wo.id, status: next })}
                     className="btn-ghost text-xs px-2.5 py-1.5"
                   >
-                    Mark {next.replace("_", " ").toLowerCase()}
+                    {t(`wo.mark${next}` as "wo.markIN_PROGRESS" | "wo.markCOMPLETED")}
                   </button>
                 )}
               </div>
               {wo.description && <p className="text-sm text-ink-300">{wo.description}</p>}
               <p className="text-xs text-ink-600 mt-1">
-                Created by {wo.createdBy?.name} · {new Date(wo.createdAt).toLocaleDateString()}
-                {wo.assignedTo && ` · Assigned to ${wo.assignedTo.name}`}
+                {t("wo.createdBy", { name: wo.createdBy?.name ?? "", date: new Date(wo.createdAt).toLocaleDateString(locale) })}
+                {wo.assignedTo && t("wo.assignedTo", { name: wo.assignedTo.name })}
                 {viewingAllHotels && wo.hotel && <span className="font-mono"> · {wo.hotel.code}</span>}
               </p>
             </div>
@@ -90,7 +93,7 @@ export function WorkOrders() {
         })}
         {workOrdersQuery.data?.length === 0 && (
           <p className="text-sm text-ink-500">
-            {viewingAllHotels ? "No work orders across any hotel yet." : "No work orders yet."}
+            {viewingAllHotels ? t("wo.emptyAll") : t("wo.emptyHotel")}
           </p>
         )}
       </div>
@@ -121,6 +124,7 @@ function CreateWorkOrderModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const t = useT();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
 
@@ -131,7 +135,7 @@ function CreateWorkOrderModal({
   });
 
   return (
-    <Modal title="New work order" onClose={onClose}>
+    <Modal title={t("wo.new")} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -140,11 +144,11 @@ function CreateWorkOrderModal({
         className="space-y-3"
       >
         <label className="block">
-          <span className="label-field">Title</span>
+          <span className="label-field">{t("field.title")}</span>
           <input required value={title} onChange={(e) => setTitle(e.target.value)} className="input-field" />
         </label>
         <label className="block">
-          <span className="label-field">Description (optional)</span>
+          <span className="label-field">{t("field.description")}</span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -152,8 +156,8 @@ function CreateWorkOrderModal({
             rows={3}
           />
         </label>
-        {createMutation.isError && <p className="text-sm text-rose-400">Could not create work order.</p>}
-        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel="Create" />
+        {createMutation.isError && <p className="text-sm text-rose-400">{t("wo.createFailed")}</p>}
+        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel={t("common.create")} />
       </form>
     </Modal>
   );

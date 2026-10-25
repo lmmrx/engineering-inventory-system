@@ -132,6 +132,7 @@ function ProtectedApp() {
 }
 
 function LoadingScreen() {
+  const t = useT();
   const takingLong = useTakingLong(true);
 
   return (
@@ -139,11 +140,11 @@ function LoadingScreen() {
       <img src={zsHoldingsLogo} alt="ZS Holdings" className="h-14 w-auto" />
       <div className="flex items-center gap-2 text-sm text-ink-500" aria-live="polite">
         <Spinner />
-        Loading...
+        {t("common.loading")}
       </div>
       {takingLong && (
         <p className="text-xs text-ink-500 max-w-xs">
-          Waking up the server — this can take up to a minute after a quiet period.
+          {t("login.waking")}
         </p>
       )}
     </div>

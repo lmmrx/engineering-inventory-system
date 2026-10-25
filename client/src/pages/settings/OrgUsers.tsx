@@ -6,9 +6,11 @@ import { useDepartmentScope } from "../../context/DepartmentScopeContext";
 import { AppUser, Department, Hotel, MIN_PASSWORD_LENGTH, Role } from "../../types";
 import { Field, Modal, ModalActions } from "../../components/Modal";
 import { TemporaryPasswordField } from "../../components/TemporaryPasswordField";
+import { useLocale, useT } from "../../i18n";
 
 export function OrgUsers() {
   const { user: currentUser } = useAuth();
+  const t = useT();
   const queryClient = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
@@ -20,12 +22,12 @@ export function OrgUsers() {
       api.post<AppUser>(`/users/${id}/${action}`),
     onMutate: () => setActionError(null),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
-    onError: (err) => setActionError(err instanceof Error ? err.message : "Could not update the account."),
+    onError: (err) => setActionError(err instanceof Error && err.message ? err.message : t("users.actionFailed")),
   });
   const hotelsQuery = useQuery({ queryKey: ["hotels"], queryFn: () => api.get<Hotel[]>("/hotels") });
   const departmentsQuery = useQuery({ queryKey: ["departments"], queryFn: () => api.get<Department[]>("/departments") });
 
-  const hotelCode = (id: string | null) => hotelsQuery.data?.find((h) => h.id === id)?.code ?? "All hotels";
+  const hotelCode = (id: string | null) => hotelsQuery.data?.find((h) => h.id === id)?.code ?? t("menu.allHotels");
   // The create form defaults its Hotel/Department dropdowns from this data —
   // opening it before both have loaded would silently submit empty IDs.
   const referenceDataReady = hotelsQuery.isSuccess && departmentsQuery.isSuccess;
@@ -48,28 +50,28 @@ export function OrgUsers() {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <h2 className="font-semibold text-ink-100">Users</h2>
+        <h2 className="font-semibold text-ink-100">{t("settings.users")}</h2>
         <button
           onClick={() => setShowCreate(true)}
           disabled={!referenceDataReady}
           className="btn-primary"
-          title={referenceDataReady ? undefined : "Loading hotels and departments..."}
+          title={referenceDataReady ? undefined : t("users.loadingRefs")}
         >
-          Add user
+          {t("users.add")}
         </button>
       </div>
       <p className="text-sm text-ink-500 mb-4">
-        {isAdmin ? "Everyone with access to the system." : "Staff in your department at your hotel."}
+        {isAdmin ? t("users.descAdmin") : t("users.descManager")}
       </p>
       <div className="table-shell">
         <table className="w-full text-sm">
           <thead className="table-head-row">
             <tr>
-              <th className="px-4 py-2">Name</th>
-              <th className="px-4 py-2">Email</th>
-              <th className="px-4 py-2">Role</th>
-              <th className="px-4 py-2">Hotel</th>
-              <th className="px-4 py-2">Status</th>
+              <th className="px-4 py-2">{t("field.name")}</th>
+              <th className="px-4 py-2">{t("field.email")}</th>
+              <th className="px-4 py-2">{t("field.role")}</th>
+              <th className="px-4 py-2">{t("inv.col.hotel")}</th>
+              <th className="px-4 py-2">{t("users.col.status")}</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -78,7 +80,7 @@ export function OrgUsers() {
               <tr key={u.id}>
                 <td className="px-4 py-2 font-medium text-ink-100">{u.name}</td>
                 <td className="px-4 py-2 text-ink-500">{u.email}</td>
-                <td className="px-4 py-2 text-ink-500">{u.role}</td>
+                <td className="px-4 py-2 text-ink-500">{t(`roleName.${u.role}`)}</td>
                 <td className="px-4 py-2 text-ink-500 font-mono">{hotelCode(u.hotelId)}</td>
                 <td className="px-4 py-2">
                   <AccountStatus user={u} />
@@ -92,25 +94,25 @@ export function OrgUsers() {
                         disabled={accountAction.isPending}
                         className="btn-ghost text-xs px-2.5 py-1.5"
                       >
-                        Unlock
+                        {t("users.unlock")}
                       </button>
                     )}
                     {canEdit(u) && u.id !== currentUser.id && (
                       <button
                         onClick={() => {
-                          if (u.disabledAt || window.confirm(`Disable ${u.name}? They'll be signed out and can't sign in until re-enabled.`)) {
+                          if (u.disabledAt || window.confirm(t("users.disableConfirm", { name: u.name }))) {
                             accountAction.mutate({ id: u.id, action: u.disabledAt ? "enable" : "disable" });
                           }
                         }}
                         disabled={accountAction.isPending}
                         className="btn-ghost text-xs px-2.5 py-1.5"
                       >
-                        {u.disabledAt ? "Enable" : "Disable"}
+                        {u.disabledAt ? t("users.enable") : t("users.disable")}
                       </button>
                     )}
                     {canEdit(u) && (
                       <button onClick={() => setEditingUser(u)} className="btn-ghost text-xs px-2.5 py-1.5">
-                        Edit
+                        {t("common.edit")}
                       </button>
                     )}
                   </div>
@@ -166,6 +168,7 @@ function CreateUserModal({
   onCreated: () => void;
 }) {
   const isAdmin = currentUser.role === "ADMIN";
+  const t = useT();
   const { selectedDepartmentId } = useDepartmentScope();
 
   const [name, setName] = useState("");
@@ -199,7 +202,7 @@ function CreateUserModal({
   const errorMessage = createMutation.error instanceof Error ? createMutation.error.message : null;
 
   return (
-    <Modal title="Add user" onClose={onClose}>
+    <Modal title={t("users.add")} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -207,10 +210,10 @@ function CreateUserModal({
         }}
         className="space-y-3"
       >
-        <Field label="Name">
+        <Field label={t("field.name")}>
           <input required value={name} onChange={(e) => setName(e.target.value)} className="input-field" />
         </Field>
-        <Field label="Email">
+        <Field label={t("field.email")}>
           <input
             required
             type="email"
@@ -219,26 +222,26 @@ function CreateUserModal({
             className="input-field"
           />
         </Field>
-        <Field label="Temporary password">
+        <Field label={t("users.tempPassword")}>
           <TemporaryPasswordField
             required
             value={password}
             onChange={setPassword}
-            placeholder={`At least ${MIN_PASSWORD_LENGTH} characters, or Generate one`}
+            placeholder={t("users.tempPlaceholder", { min: MIN_PASSWORD_LENGTH })}
           />
-          <p className="text-xs text-ink-500 mt-1">They'll choose their own at first sign-in.</p>
+          <p className="text-xs text-ink-500 mt-1">{t("users.tempHint")}</p>
         </Field>
 
         {isAdmin ? (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Role">
+            <Field label={t("field.role")}>
               <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
-                <option value="STAFF">Staff</option>
-                <option value="MANAGER">Manager (department + property admin)</option>
-                <option value="ADMIN">Admin (full organization access)</option>
+                <option value="STAFF">{t("users.optionSTAFF")}</option>
+                <option value="MANAGER">{t("users.optionMANAGER")}</option>
+                <option value="ADMIN">{t("users.optionADMIN")}</option>
               </select>
             </Field>
-            <Field label="Department">
+            <Field label={t("field.department")}>
               <select
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
@@ -254,12 +257,12 @@ function CreateUserModal({
           </div>
         ) : (
           <p className="text-sm text-ink-500">
-            New users you create are always Staff, in your hotel and department.
+            {t("users.managerCreatesStaff")}
           </p>
         )}
 
         {isAdmin && effectiveRole !== "ADMIN" && (
-          <Field label="Hotel (property)">
+          <Field label={t("field.hotel")}>
             <select value={hotelId} onChange={(e) => setHotelId(e.target.value)} className="input-field">
               {hotels.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -271,7 +274,7 @@ function CreateUserModal({
         )}
 
         {errorMessage && <p className="text-sm text-rose-400">{errorMessage}</p>}
-        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel="Create" />
+        <ModalActions onClose={onClose} submitting={createMutation.isPending} submitLabel={t("common.create")} />
       </form>
     </Modal>
   );
@@ -293,6 +296,7 @@ function EditUserModal({
   onSaved: () => void;
 }) {
   const isAdmin = currentUser.role === "ADMIN";
+  const t = useT();
 
   const [name, setName] = useState(targetUser.name);
   const [role, setRole] = useState<Role>(targetUser.role);
@@ -319,7 +323,7 @@ function EditUserModal({
   const departmentName = departments.find((d) => d.id === targetUser.departmentId)?.name ?? "—";
 
   return (
-    <Modal title={`Edit user · ${targetUser.name}`} onClose={onClose}>
+    <Modal title={t("users.editTitle", { name: targetUser.name })} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -327,23 +331,23 @@ function EditUserModal({
         }}
         className="space-y-3"
       >
-        <Field label="Name">
+        <Field label={t("field.name")}>
           <input required value={name} onChange={(e) => setName(e.target.value)} className="input-field" />
         </Field>
-        <Field label="Email">
+        <Field label={t("field.email")}>
           <input value={targetUser.email} disabled className="input-field opacity-60 cursor-not-allowed" />
         </Field>
 
         {isAdmin ? (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Role">
+            <Field label={t("field.role")}>
               <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
-                <option value="STAFF">Staff</option>
-                <option value="MANAGER">Manager (department + property admin)</option>
-                <option value="ADMIN">Admin (full organization access)</option>
+                <option value="STAFF">{t("users.optionSTAFF")}</option>
+                <option value="MANAGER">{t("users.optionMANAGER")}</option>
+                <option value="ADMIN">{t("users.optionADMIN")}</option>
               </select>
             </Field>
-            <Field label="Department">
+            <Field label={t("field.department")}>
               <select
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
@@ -358,15 +362,15 @@ function EditUserModal({
             </Field>
           </div>
         ) : (
-          <Field label="Role · Department">
+          <Field label={t("users.roleDepartment")}>
             <p className="text-sm text-ink-300">
-              Staff · {departmentName} — as their Manager, you can't change a user's role or move them elsewhere.
+              {t("users.managerLimits", { department: departmentName })}
             </p>
           </Field>
         )}
 
         {isAdmin && role !== "ADMIN" && (
-          <Field label="Hotel (property)">
+          <Field label={t("field.hotel")}>
             <select value={hotelId} onChange={(e) => setHotelId(e.target.value)} className="input-field">
               {hotels.map((h) => (
                 <option key={h.id} value={h.id}>
@@ -377,26 +381,26 @@ function EditUserModal({
           </Field>
         )}
         {!isAdmin && (
-          <Field label="Hotel (property)">
+          <Field label={t("field.hotel")}>
             <p className="text-sm text-ink-300 font-mono">{hotelName}</p>
           </Field>
         )}
 
-        <Field label="Reset password (optional)">
+        <Field label={t("users.resetPassword")}>
           <TemporaryPasswordField
             value={newPassword}
             onChange={setNewPassword}
-            placeholder="Leave blank to keep, or Generate one"
+            placeholder={t("users.resetPlaceholder")}
           />
           {newPassword && (
             <p className="text-xs text-ink-500 mt-1">
-              Saving signs them out everywhere; they'll choose their own password at next sign-in.
+              {t("users.resetHint")}
             </p>
           )}
         </Field>
 
         {errorMessage && <p className="text-sm text-rose-400">{errorMessage}</p>}
-        <ModalActions onClose={onClose} submitting={saveMutation.isPending} submitLabel="Save changes" />
+        <ModalActions onClose={onClose} submitting={saveMutation.isPending} submitLabel={t("common.saveChanges")} />
       </form>
     </Modal>
   );
@@ -407,11 +411,13 @@ function isLocked(u: AppUser) {
 }
 
 function AccountStatus({ user }: { user: AppUser }) {
-  if (user.disabledAt) return <span className="text-xs text-ink-500">Disabled</span>;
+  const t = useT();
+  const locale = useLocale();
+  if (user.disabledAt) return <span className="text-xs text-ink-500">{t("users.disabled")}</span>;
   if (isLocked(user)) {
-    const until = new Date(user.lockedUntil!).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    return <span className="text-xs text-rose-400">Locked until {until}</span>;
+    const until = new Date(user.lockedUntil!).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+    return <span className="text-xs text-rose-400">{t("users.lockedUntil", { time: until })}</span>;
   }
-  if (user.mustChangePassword) return <span className="text-xs text-amber-400">Must change password</span>;
-  return <span className="text-xs text-emerald-400">Active</span>;
+  if (user.mustChangePassword) return <span className="text-xs text-amber-400">{t("users.mustChange")}</span>;
+  return <span className="text-xs text-emerald-400">{t("users.active")}</span>;
 }

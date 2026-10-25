@@ -14,6 +14,19 @@ export interface CurrentUser {
   passwordExpiresAt?: string | null;
   /** Display settings saved on the account (see preferences.ts). */
   preferences?: Partial<Preferences>;
+  position?: string | null;
+  phone?: string | null;
+  manager?: { id: string; name: string } | null;
+  /** Changes whenever the profile photo does; null when there's no photo. */
+  avatarVersion?: number | null;
+}
+
+/** Someone the user can pick as their manager. */
+export interface ManagerOption {
+  id: string;
+  name: string;
+  role: Role;
+  position: string | null;
 }
 
 /** Start reminding people this many days before their password expires. */
@@ -211,6 +224,7 @@ export interface UsageAnomaly {
   date: string;
   itemId: string;
   itemName: string;
+  unit: string;
   hotelCode: string;
   quantity: number;
   performedBy: string;

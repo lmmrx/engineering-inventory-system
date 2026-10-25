@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { Hotel } from "../../types";
+import { useT } from "../../i18n";
 
 export function OrgHotels() {
+  const t = useT();
   const queryClient = useQueryClient();
   const hotelsQuery = useQuery({ queryKey: ["hotels"], queryFn: () => api.get<Hotel[]>("/hotels") });
   const [editing, setEditing] = useState<Record<string, string>>({});
@@ -17,15 +19,15 @@ export function OrgHotels() {
 
   return (
     <div>
-      <h2 className="font-semibold text-ink-100 mb-1">Hotels</h2>
-      <p className="text-sm text-ink-500 mb-4">Rename the hotels in your portfolio.</p>
+      <h2 className="font-semibold text-ink-100 mb-1">{t("settings.hotels")}</h2>
+      <p className="text-sm text-ink-500 mb-4">{t("org.hotelsHint")}</p>
       {errorMessage && <p className="text-sm text-rose-400 mb-4">{errorMessage}</p>}
       <div className="table-shell">
         <table className="w-full text-sm">
           <thead className="table-head-row">
             <tr>
-              <th className="px-4 py-2">Code</th>
-              <th className="px-4 py-2">Name</th>
+              <th className="px-4 py-2">{t("org.code")}</th>
+              <th className="px-4 py-2">{t("org.name")}</th>
               <th className="px-4 py-2"></th>
             </tr>
           </thead>
@@ -40,12 +42,12 @@ export function OrgHotels() {
                     className="input-field max-w-xs py-1"
                   />
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-end">
                   <button
                     onClick={() => updateMutation.mutate({ id: hotel.id, name: editing[hotel.id] ?? hotel.name })}
                     className="btn-ghost text-xs px-2.5 py-1.5"
                   >
-                    Save
+                    {t("common.save")}
                   </button>
                 </td>
               </tr>

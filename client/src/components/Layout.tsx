@@ -153,7 +153,7 @@ export function Layout() {
           )}
         </div>
 
-        <nav className={`flex-1 overflow-y-auto space-y-0.5 ${compact ? "px-2" : "px-3"}`} aria-label="Main">
+        <nav className={`flex-1 overflow-y-auto space-y-0.5 ${compact ? "px-2" : "px-3"}`} aria-label={t("nav.main")}>
           {links.map((item) => (
             <NavLink
               key={item.to}

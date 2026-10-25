@@ -2,18 +2,12 @@ import { useCallback } from "react";
 import { usePreferences } from "../context/PreferencesContext";
 import type { Language } from "../preferences";
 import { en, MessageKey } from "./en";
-import { fil } from "./fil";
 import { fr } from "./fr";
-import { pa } from "./pa";
-import { ro } from "./ro";
-import { ru } from "./ru";
-import { so } from "./so";
 import type { Messages } from "./types";
-import { ur } from "./ur";
 
 export type { MessageKey } from "./en";
 
-const DICTIONARIES: Record<Language, Messages> = { en, fr, fil, pa, so, ru, ur, ro };
+const DICTIONARIES: Record<Language, Messages> = { en, fr };
 
 /**
  * The text for `key` in `language`, falling back to English for anything not
@@ -36,6 +30,6 @@ export function useT() {
 /** Dates and numbers formatted for the chosen language. */
 export function useLocale() {
   const { preferences } = usePreferences();
-  // Filipino and Somali formatting are well supported under their own codes; Urdu as Pakistan.
-  return preferences.language === "ur" ? "ur-PK" : preferences.language;
+  // Canadian formats (e.g. dates), matching where the hotels are.
+  return preferences.language === "fr" ? "fr-CA" : "en-CA";
 }

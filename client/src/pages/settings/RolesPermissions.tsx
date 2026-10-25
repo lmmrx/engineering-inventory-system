@@ -1,62 +1,66 @@
+import { MessageKey, useT } from "../../i18n";
+
 interface Capability {
-  label: string;
+  label: MessageKey;
   admin: boolean;
   manager: boolean;
   staff: boolean;
 }
 
 const CAPABILITIES: Capability[] = [
-  { label: "View inventory & log stock movements", admin: true, manager: true, staff: true },
-  { label: "Create work orders & update their status", admin: true, manager: true, staff: true },
-  { label: "Create purchase requests", admin: true, manager: true, staff: true },
-  { label: "Mark a purchase request as received", admin: true, manager: true, staff: true },
-  { label: "Approve or reject purchase requests", admin: true, manager: true, staff: false },
-  { label: "Add or edit inventory items", admin: true, manager: true, staff: false },
-  { label: "Manage categories", admin: true, manager: true, staff: false },
-  { label: "Create Staff accounts in their own hotel & department", admin: true, manager: true, staff: false },
-  { label: "Edit Staff accounts in their own hotel & department (name, password)", admin: true, manager: true, staff: false },
-  { label: "Create Manager or Admin accounts", admin: true, manager: false, staff: false },
-  { label: "Change a user's role, hotel, or department", admin: true, manager: false, staff: false },
-  { label: "Rename hotels", admin: true, manager: false, staff: false },
-  { label: "View or act on other hotels' or departments' data", admin: true, manager: false, staff: false },
-  { label: "Export inventory / transaction data", admin: true, manager: true, staff: false },
+  { label: "roles.cap.viewInventory", admin: true, manager: true, staff: true },
+  { label: "roles.cap.workOrders", admin: true, manager: true, staff: true },
+  { label: "roles.cap.createRequests", admin: true, manager: true, staff: true },
+  { label: "roles.cap.receiveRequests", admin: true, manager: true, staff: true },
+  { label: "roles.cap.ownProfile", admin: true, manager: true, staff: true },
+  { label: "roles.cap.approveRequests", admin: true, manager: true, staff: false },
+  { label: "roles.cap.editItems", admin: true, manager: true, staff: false },
+  { label: "roles.cap.categories", admin: true, manager: true, staff: false },
+  { label: "roles.cap.createStaff", admin: true, manager: true, staff: false },
+  { label: "roles.cap.editStaff", admin: true, manager: true, staff: false },
+  { label: "roles.cap.analytics", admin: true, manager: true, staff: false },
+  { label: "roles.cap.export", admin: true, manager: true, staff: false },
+  { label: "roles.cap.createManagers", admin: true, manager: false, staff: false },
+  { label: "roles.cap.moveUsers", admin: true, manager: false, staff: false },
+  { label: "roles.cap.renameHotels", admin: true, manager: false, staff: false },
+  { label: "roles.cap.otherHotels", admin: true, manager: false, staff: false },
 ];
 
 function Mark({ granted }: { granted: boolean }) {
+  const t = useT();
   return granted ? (
-    <span className="text-emerald-400" aria-label="Allowed">
+    <span className="text-emerald-400" aria-label={t("roles.allowed")}>
       ✓
     </span>
   ) : (
-    <span className="text-ink-600" aria-label="Not allowed">
+    <span className="text-ink-600" aria-label={t("roles.notAllowed")}>
       —
     </span>
   );
 }
 
 export function RolesPermissions() {
+  const t = useT();
   return (
     <div>
-      <h2 className="font-semibold text-ink-100 mb-1">Roles & permissions</h2>
+      <h2 className="font-semibold text-ink-100 mb-1">{t("settings.roles")}</h2>
       <p className="text-sm text-ink-500 mb-4">
-        What each role can do. A Manager is the admin for exactly one hotel + department pair (e.g. Engineering at
-        one property) and can't see or act on any other hotel or department. Only Admin has access across the
-        whole organization.
+        {t("roles.description")}
       </p>
       <div className="table-shell overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="table-head-row">
             <tr>
-              <th className="px-4 py-2">Capability</th>
-              <th className="px-4 py-2 text-center">Admin</th>
-              <th className="px-4 py-2 text-center">Manager</th>
-              <th className="px-4 py-2 text-center">Staff</th>
+              <th className="px-4 py-2">{t("roles.capability")}</th>
+              <th className="px-4 py-2 text-center">{t("roleName.ADMIN")}</th>
+              <th className="px-4 py-2 text-center">{t("roleName.MANAGER")}</th>
+              <th className="px-4 py-2 text-center">{t("roleName.STAFF")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-navy-800">
             {CAPABILITIES.map((c) => (
               <tr key={c.label}>
-                <td className="px-4 py-2 text-ink-200">{c.label}</td>
+                <td className="px-4 py-2 text-ink-200">{t(c.label)}</td>
                 <td className="px-4 py-2 text-center">
                   <Mark granted={c.admin} />
                 </td>

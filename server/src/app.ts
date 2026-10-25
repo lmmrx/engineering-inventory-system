@@ -1,10 +1,10 @@
 import cors from "cors";
 import helmet from "helmet";
 import express, { NextFunction, Request, Response } from "express";
-import { z } from "zod";
 import { analyticsRouter } from "./routes/analytics";
 import { auditLogsRouter } from "./routes/auditLogs";
-import { authRouter, publicUser } from "./routes/auth";
+import { authRouter } from "./routes/auth";
+import { avatarsRouter, meRouter } from "./routes/me";
 import { categoriesRouter } from "./routes/categories";
 import { dashboardRouter } from "./routes/dashboard";
 import { exportRouter } from "./routes/export";
@@ -16,9 +16,7 @@ import { usersRouter } from "./routes/users";
 import { workOrdersRouter } from "./routes/workOrders";
 import { requireAuth } from "./middleware/auth";
 import { asyncHandler } from "./lib/asyncHandler";
-import { audit, diff } from "./lib/audit";
 import { prisma } from "./lib/prisma";
-import { preferencesSchema, readPreferences } from "./lib/preferences";
 
 export function createApp() {
   const app = express();
@@ -48,6 +46,9 @@ export function createApp() {
   // Standard security headers (nosniff, no framing, HSTS, a deny-all CSP —
   // the API only ever serves JSON).
   app.use(helmet());
+  // Photo uploads arrive as base64 text; the browser has already shrunk them,
+  // so this route alone gets a little more room than every other request.
+  app.use("/me/avatar", express.json({ limit: "400kb" }));
   app.use(express.json({ limit: "100kb" }));
 
   app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -74,6 +75,8 @@ export function createApp() {
   app.use("/dashboard", dashboardRouter);
   app.use("/audit-logs", auditLogsRouter);
   app.use("/analytics", analyticsRouter);
+  app.use("/me", meRouter);
+  app.use("/avatars", avatarsRouter);
 
   app.get(
     "/departments",
@@ -84,58 +87,15 @@ export function createApp() {
     })
   );
 
-  app.get(
-    "/me",
-    requireAuth,
-    asyncHandler(async (req, res) => {
-      const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
-      res.json(user ? publicUser(user) : null);
-    })
-  );
-
-  // Users can change their own name and display preferences, nothing else.
-  const updateMeSchema = z
-    .object({ name: z.string().trim().min(1).max(100), preferences: preferencesSchema })
-    .partial()
-    .strict();
-
-  app.patch(
-    "/me",
-    requireAuth,
-    asyncHandler(async (req, res) => {
-      const parsed = updateMeSchema.safeParse(req.body);
-      if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-
-      const before = await prisma.user.findUnique({ where: { id: req.user!.userId } });
-      const user = await prisma.user.update({
-        where: { id: req.user!.userId },
-        data: {
-          name: parsed.data.name,
-          // Merged, so changing the theme doesn't reset the language.
-          preferences: parsed.data.preferences
-            ? { ...readPreferences(before?.preferences), ...parsed.data.preferences }
-            : undefined,
-        },
-      });
-      if (before && parsed.data.name && before.name !== user.name) {
-        await audit(req, {
-          action: "user.updated",
-          entityId: user.id,
-          summary: `${before.name} renamed themselves to ${user.name}`,
-          changes: await diff(before, { ...before, name: user.name }, ["name"]),
-          hotelId: user.hotelId,
-          departmentId: user.departmentId,
-        });
-      }
-      res.json(publicUser(user));
-    })
-  );
-
   // Catches anything a route didn't handle itself (including async errors passed to
   // next() by asyncHandler) so a bad request returns a clean JSON error instead of
   // crashing the process or leaving the client hanging.
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     console.error(err);
+
+    if ((err as { type?: string })?.type === "entity.too.large") {
+      return res.status(413).json({ error: "That upload is too large — try a smaller photo" });
+    }
 
     const prismaError = err as { code?: string; meta?: { target?: string[] } };
     if (prismaError?.code === "P2002") {

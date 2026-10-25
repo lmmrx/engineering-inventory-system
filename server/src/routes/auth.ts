@@ -5,9 +5,9 @@ import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
 import { signToken } from "../lib/auth";
 import { audit } from "../lib/audit";
-import { isPasswordExpired, isWeakPassword, passwordExpiresAt, passwordSchema } from "../lib/password";
+import { isPasswordExpired, isWeakPassword, passwordSchema } from "../lib/password";
+import { loadPublicUser } from "../lib/publicUser";
 import { FailureLimiter } from "../lib/rateLimit";
-import { readPreferences } from "../lib/preferences";
 import { requireAuth } from "../middleware/auth";
 
 export const authRouter = Router();
@@ -35,34 +35,6 @@ function tooManyAttempts(res: Response, retryAfterSeconds: number) {
   return res.status(429).json({
     error: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
   });
-}
-
-/** The signed-in user as the app sees it, from sign-in and from GET /me. */
-export function publicUser(user: {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  hotelId: string | null;
-  departmentId: string | null;
-  mustChangePassword: boolean;
-  passwordChangedAt: Date;
-  preferences: unknown;
-}) {
-  const { id, name, email, role, hotelId, departmentId, mustChangePassword } = user;
-  // Lets the app remind the user before their password expires.
-  const passwordExpires = passwordExpiresAt(user.passwordChangedAt);
-  return {
-    id,
-    name,
-    email,
-    role,
-    hotelId,
-    departmentId,
-    mustChangePassword,
-    passwordExpiresAt: passwordExpires,
-    preferences: readPreferences(user.preferences),
-  };
 }
 
 const loginSchema = z.object({
@@ -157,7 +129,7 @@ authRouter.post(
       departmentId: user.departmentId,
     });
 
-    res.json({ token: signToken(user), user: publicUser({ ...user, mustChangePassword }) });
+    res.json({ token: signToken(user), user: await loadPublicUser(user.id) });
   })
 );
 
@@ -213,6 +185,6 @@ authRouter.post(
       departmentId: user.departmentId,
     });
 
-    res.json({ ok: true, token: signToken(updated), user: publicUser(updated) });
+    res.json({ ok: true, token: signToken(updated), user: await loadPublicUser(updated.id) });
   })
 );

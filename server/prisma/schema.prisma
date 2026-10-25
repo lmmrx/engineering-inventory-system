@@ -82,6 +82,15 @@ model User {
   // Display settings the user picks for themselves: theme, font, zoom,
   // language (see server/src/lib/preferences.ts).
   preferences        Json?
+
+  // Profile details the user fills in themselves (Settings → Profile).
+  position  String?
+  phone     String?
+  // Who they report to: an Admin, or a Manager at their hotel.
+  managerId String?
+  manager   User?   @relation("ReportsTo", fields: [managerId], references: [id], onDelete: SetNull)
+  reports   User[]  @relation("ReportsTo")
+  avatar    UserAvatar?
   // Consecutive wrong passwords; reaching the limit sets lockedUntil. Only an
   // Admin (or the server-console recovery script) can lift a lock early.
   failedLoginCount   Int       @default(0)
@@ -99,6 +108,17 @@ model User {
   requestedPurchases    PurchaseRequest[]   @relation("RequestedBy")
   approvedPurchases     PurchaseRequest[]   @relation("ApprovedBy")
   auditEntries          AuditLog[]          @relation("AuditActor")
+}
+
+// A profile photo, kept apart from User so it isn't loaded with every
+// request. Stored in the database because the host's disk is wiped on each
+// deploy; the browser shrinks photos to a small square before uploading.
+model UserAvatar {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mimeType  String
+  data      Bytes
+  updatedAt DateTime @updatedAt
 }
 
 model Category {

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api/client";
 import { useDepartmentScope } from "../../context/DepartmentScopeContext";
 import { Category } from "../../types";
+import { useT } from "../../i18n";
 
 type CategoryWithCount = Category & { itemCount: number };
 
@@ -15,6 +16,7 @@ type Adding = { parentId: string | null } | null;
  */
 export function OrgCategories() {
   const { departments, selectedDepartmentId } = useDepartmentScope();
+  const t = useT();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState<Adding>(null);
@@ -39,7 +41,7 @@ export function OrgCategories() {
     // Also refreshes the category pickers on the Inventory page.
     queryClient.invalidateQueries({ queryKey: ["categories"] });
   };
-  const onFail = (err: unknown) => setError(err instanceof Error && err.message ? err.message : "Could not save.");
+  const onFail = (err: unknown) => setError(err instanceof Error && err.message ? err.message : t("cat.saveFailed"));
 
   const createMutation = useMutation({
     mutationFn: (body: { name: string; parentId: string | null }) =>
@@ -72,19 +74,18 @@ export function OrgCategories() {
     setAdding({ parentId });
   }
   function remove(category: CategoryWithCount, subcategories: CategoryWithCount[]) {
-    const what =
+    const question =
       subcategories.length > 0
-        ? `the group "${category.name}" and its ${subcategories.length} subcategories`
-        : `"${category.name}"`;
-    if (window.confirm(`Delete ${what}? This can't be undone.`)) deleteMutation.mutate(category.id);
+        ? t("cat.deleteGroupConfirm", { name: category.name, count: subcategories.length })
+        : t("cat.deleteConfirm", { name: category.name });
+    if (window.confirm(question)) deleteMutation.mutate(category.id);
   }
 
   return (
     <div>
-      <h2 className="font-semibold text-ink-100 mb-1">Categories</h2>
+      <h2 className="font-semibold text-ink-100 mb-1">{t("settings.categories")}</h2>
       <p className="text-sm text-ink-500 mb-4">
-        How items are organized in <span className="text-ink-300">{departmentName}</span>: groups, each with optional
-        subcategories. Items can be filed under either. Switch departments from the account menu to manage another one.
+        {t("cat.description", { department: departmentName })}
       </p>
 
       {error && <p className="text-sm text-rose-400 mb-3">{error}</p>}
@@ -125,7 +126,7 @@ export function OrgCategories() {
               {adding?.parentId === group.id ? (
                 <NameInput
                   indent
-                  placeholder={`New subcategory in ${group.name}`}
+                  placeholder={t("cat.newSubcategory", { group: group.name })}
                   busy={busy}
                   onSave={(name) => createMutation.mutate({ name, parentId: group.id })}
                   onCancel={() => setAdding(null)}
@@ -133,9 +134,9 @@ export function OrgCategories() {
               ) : (
                 <button
                   onClick={() => startAdding(group.id)}
-                  className="ml-8 sm:ml-10 my-1 text-xs text-gold-400 hover:text-gold-300"
+                  className="ms-8 sm:ms-10 my-1 text-xs text-gold-400 hover:text-gold-300"
                 >
-                  + Add subcategory
+                  {t("cat.addSubcategory")}
                 </button>
               )}
             </div>
@@ -143,20 +144,20 @@ export function OrgCategories() {
         })}
 
         {groups.length === 0 && categoriesQuery.isSuccess && (
-          <p className="px-4 py-3 text-sm text-ink-500">No categories yet in this department.</p>
+          <p className="px-4 py-3 text-sm text-ink-500">{t("cat.empty")}</p>
         )}
 
         <div className="py-2">
           {adding?.parentId === null ? (
             <NameInput
-              placeholder="New group name"
+              placeholder={t("cat.newGroup")}
               busy={busy}
               onSave={(name) => createMutation.mutate({ name, parentId: null })}
               onCancel={() => setAdding(null)}
             />
           ) : (
             <button onClick={() => startAdding(null)} className="px-4 text-sm font-medium text-gold-400 hover:text-gold-300">
-              + Add group
+              {t("cat.addGroup")}
             </button>
           )}
         </div>
@@ -164,8 +165,7 @@ export function OrgCategories() {
 
       {groups.length > 0 && (
         <p className="text-xs text-ink-500 mt-2">
-          {groups.length} groups · {all.length - groups.length} subcategories. A category can only be deleted once it has
-          no items.
+          {t("cat.summary", { groups: groups.length, subcategories: all.length - groups.length })}
         </p>
       )}
     </div>
@@ -197,6 +197,7 @@ function CategoryRow({
   onSave: (name: string, parentId: string | null) => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   const [name, setName] = useState(category.name);
   const [parentId, setParentId] = useState(category.parentId ?? "");
 
@@ -205,38 +206,38 @@ function CategoryRow({
     const canMove = !hasSubcategories;
     const save = () => name.trim() && onSave(name.trim(), parentId || null);
     return (
-      <div className={`px-4 py-2 flex flex-col sm:flex-row sm:items-center gap-2 bg-navy-850 ${isGroup ? "" : "sm:pl-10"}`}>
+      <div className={`px-4 py-2 flex flex-col sm:flex-row sm:items-center gap-2 bg-navy-850 ${isGroup ? "" : "sm:ps-10"}`}>
         <input
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => handleKeys(e, save, onCancel)}
           className="input-field py-1.5 sm:flex-1"
-          aria-label="Category name"
+          aria-label={t("cat.name")}
         />
         <select
           value={parentId}
           onChange={(e) => setParentId(e.target.value)}
           disabled={!canMove}
           className="input-field py-1.5 sm:w-56 disabled:opacity-60"
-          aria-label="Group"
-          title={canMove ? "Which group it belongs to" : "Move or delete its subcategories first"}
+          aria-label={t("cat.group")}
+          title={canMove ? t("cat.groupHint") : t("cat.mustStayGroup")}
         >
-          <option value="">Top-level group</option>
+          <option value="">{t("cat.topLevel")}</option>
           {groups
             .filter((g) => g.id !== category.id)
             .map((g) => (
               <option key={g.id} value={g.id}>
-                In {g.name}
+                {t("cat.inGroup", { group: g.name })}
               </option>
             ))}
         </select>
         <div className="flex gap-2">
           <button onClick={save} disabled={busy || !name.trim()} className="btn-primary text-xs px-3 py-1.5">
-            Save
+            {t("common.save")}
           </button>
           <button onClick={onCancel} className="btn-ghost text-xs px-3 py-1.5">
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       </div>
@@ -244,13 +245,13 @@ function CategoryRow({
   }
 
   return (
-    <div className={`group px-4 py-1.5 flex items-center gap-3 ${isGroup ? "" : "pl-8 sm:pl-10"}`}>
+    <div className={`group px-4 py-1.5 flex items-center gap-3 ${isGroup ? "" : "ps-8 sm:ps-10"}`}>
       {/* Long names wrap on phones rather than being cut off. */}
       <span className={`flex-1 min-w-0 break-words ${isGroup ? "font-medium text-ink-100" : "text-sm text-ink-200"}`}>
         {category.name}
       </span>
       <span className="text-xs text-ink-500 tabular-nums whitespace-nowrap">
-        {itemCount === 0 ? "No items" : `${itemCount} item${itemCount === 1 ? "" : "s"}`}
+        {itemCount === 0 ? t("cat.noItems") : itemCount === 1 ? t("cat.oneItem") : t("cat.items", { count: itemCount })}
       </span>
       <div className="flex gap-1 flex-none">
         <button
@@ -260,18 +261,18 @@ function CategoryRow({
             onEdit();
           }}
           className="btn-ghost text-xs px-2 py-1"
-          aria-label={`Edit ${category.name}`}
+          aria-label={t("cat.editLabel", { name: category.name })}
         >
-          Edit
+          {t("common.edit")}
         </button>
         <button
           onClick={onDelete}
           disabled={busy || itemCount > 0}
-          title={itemCount > 0 ? `Move or remove its ${itemCount} item${itemCount === 1 ? "" : "s"} first` : undefined}
+          title={itemCount > 0 ? t("cat.deleteBlocked", { count: itemCount }) : undefined}
           className="text-xs px-2 py-1 rounded-md border border-rose-700/60 text-rose-300 hover:bg-rose-500/10 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-          aria-label={`Delete ${category.name}`}
+          aria-label={t("cat.deleteLabel", { name: category.name })}
         >
-          Delete
+          {t("common.delete")}
         </button>
       </div>
     </div>
@@ -291,10 +292,11 @@ function NameInput({
   onSave: (name: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [name, setName] = useState("");
   const save = () => name.trim() && onSave(name.trim());
   return (
-    <div className={`px-4 py-2 flex items-center gap-2 ${indent ? "pl-8 sm:pl-10" : ""}`}>
+    <div className={`px-4 py-2 flex items-center gap-2 ${indent ? "ps-8 sm:ps-10" : ""}`}>
       <input
         autoFocus
         value={name}
@@ -305,10 +307,10 @@ function NameInput({
         aria-label={placeholder}
       />
       <button onClick={save} disabled={busy || !name.trim()} className="btn-primary text-xs px-3 py-1.5 flex-none">
-        Add
+        {t("common.add")}
       </button>
       <button onClick={onCancel} className="btn-ghost text-xs px-3 py-1.5 flex-none">
-        Cancel
+        {t("common.cancel")}
       </button>
     </div>
   );

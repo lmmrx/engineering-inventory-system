@@ -1,13 +1,14 @@
 import { useState } from "react";
+import { MessageKey, useT } from "../i18n";
 
 type Preset = "last7" | "last30" | "thisMonth" | "lastMonth" | "custom";
 
-const PRESETS: { key: Preset; label: string }[] = [
-  { key: "last7", label: "Last 7 days" },
-  { key: "last30", label: "Last 30 days" },
-  { key: "thisMonth", label: "This month" },
-  { key: "lastMonth", label: "Last month" },
-  { key: "custom", label: "Custom" },
+const PRESETS: { key: Preset; label: MessageKey }[] = [
+  { key: "last7", label: "period.last7" },
+  { key: "last30", label: "period.last30" },
+  { key: "thisMonth", label: "period.thisMonth" },
+  { key: "lastMonth", label: "period.lastMonth" },
+  { key: "custom", label: "period.custom" },
 ];
 
 export function toInputDate(d: Date) {
@@ -60,6 +61,7 @@ export function usePeriod() {
 export type PeriodState = ReturnType<typeof usePeriod>;
 
 export function PeriodPicker({ state }: { state: PeriodState }) {
+  const t = useT();
   const { period, invalid, preset, setPreset, customFrom, setCustomFrom, customTo, setCustomTo } = state;
   return (
     <div>
@@ -74,7 +76,7 @@ export function PeriodPicker({ state }: { state: PeriodState }) {
                 : "border-navy-700 text-ink-300 hover:border-navy-600"
             }`}
           >
-            {p.label}
+            {t(p.label)}
           </button>
         ))}
       </div>
@@ -86,23 +88,23 @@ export function PeriodPicker({ state }: { state: PeriodState }) {
             max={customTo}
             onChange={(e) => setCustomFrom(e.target.value)}
             className="input-field w-auto py-1"
-            aria-label="Start date"
+            aria-label={t("period.start")}
           />
-          <span className="text-ink-500">to</span>
+          <span className="text-ink-500">–</span>
           <input
             type="date"
             value={customTo}
             min={customFrom}
             onChange={(e) => setCustomTo(e.target.value)}
             className="input-field w-auto py-1"
-            aria-label="End date"
+            aria-label={t("period.end")}
           />
         </div>
       )}
       <p className="mt-2 text-xs text-ink-500">
         {invalid
-          ? "Pick a start date on or before the end date."
-          : `Period: ${toInputDate(period.from)} to ${toInputDate(period.to)}`}
+          ? t("period.invalid")
+          : t("period.summary", { from: toInputDate(period.from), to: toInputDate(period.to) })}
       </p>
     </div>
   );

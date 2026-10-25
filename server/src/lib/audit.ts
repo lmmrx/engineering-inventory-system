@@ -56,6 +56,7 @@ const NAME_LOOKUPS: Record<string, (id: string) => Promise<string | undefined>> 
   categoryId: async (id) => (await prisma.category.findUnique({ where: { id } }))?.name,
   parentId: async (id) => (await prisma.category.findUnique({ where: { id } }))?.name,
   assignedToUserId: async (id) => (await prisma.user.findUnique({ where: { id } }))?.name,
+  managerId: async (id) => (await prisma.user.findUnique({ where: { id } }))?.name,
 };
 
 /** Short, human-readable reference for a record, shared by the audit log and exports so they cross-match. */

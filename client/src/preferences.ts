@@ -9,7 +9,7 @@ export type Theme = "dark" | "light" | "system";
 export type FontSize = "tiny" | "small" | "default" | "large" | "huge";
 export type FontFamily = "system" | "classic" | "serif" | "rounded" | "readable" | "mono";
 export type Zoom = 80 | 90 | 100 | 110 | 125 | 150;
-export type Language = "en" | "fr" | "fil" | "pa" | "so" | "ru" | "ur" | "ro";
+export type Language = "en" | "fr";
 
 export interface Preferences {
   theme: Theme;
@@ -55,12 +55,6 @@ export const ZOOMS: Zoom[] = [80, 90, 100, 110, 125, 150];
 export const LANGUAGES: { value: Language; nativeName: string; englishName: string; rtl?: boolean }[] = [
   { value: "en", nativeName: "English", englishName: "English" },
   { value: "fr", nativeName: "Français", englishName: "French" },
-  { value: "fil", nativeName: "Filipino (Tagalog)", englishName: "Filipino (Tagalog)" },
-  { value: "pa", nativeName: "ਪੰਜਾਬੀ", englishName: "Punjabi" },
-  { value: "so", nativeName: "Soomaali", englishName: "Somali" },
-  { value: "ru", nativeName: "Русский", englishName: "Russian" },
-  { value: "ur", nativeName: "اردو", englishName: "Urdu (Pakistan)", rtl: true },
-  { value: "ro", nativeName: "Română", englishName: "Romanian" },
 ];
 
 const STORAGE_KEY = "preferences";

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { MIN_PASSWORD_LENGTH } from "../types";
 import { PasswordInput } from "./PasswordInput";
+import { useT } from "../i18n";
 
 // No look-alike characters (0/O, 1/l/I), so it can be read out or copied by hand without mistakes.
 const ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -34,6 +35,7 @@ export function TemporaryPasswordField({
   required?: boolean;
   placeholder?: string;
 }) {
+  const t = useT();
   const [generated, setGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -60,7 +62,7 @@ export function TemporaryPasswordField({
               className="input-field font-mono"
               autoComplete="off"
               spellCheck={false}
-              aria-label="Temporary password"
+              aria-label={t("password.temporary")}
             />
           ) : (
             <PasswordInput
@@ -83,17 +85,17 @@ export function TemporaryPasswordField({
           }}
           className="btn-ghost text-xs px-2.5 flex-none"
         >
-          Generate
+          {t("common.generate")}
         </button>
         {generated && value && (
           <button type="button" onClick={copy} className="btn-ghost text-xs px-2.5 flex-none">
-            {copied ? "Copied" : "Copy"}
+            {copied ? t("common.copied") : t("common.copy")}
           </button>
         )}
       </div>
       {generated && value && (
         <p className="text-xs text-ink-500">
-          Copy this now and give it to them privately. It won't be shown again after saving.
+          {t("password.copyHint")}
         </p>
       )}
     </div>

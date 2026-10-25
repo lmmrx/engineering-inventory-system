@@ -5,48 +5,32 @@ import { api } from "../../api/client";
 import { PeriodPicker, toInputDate, usePeriod } from "../../components/PeriodPicker";
 import { Spinner } from "../../components/Spinner";
 import { AppUser, AuditLogEntry, AuditLogPage } from "../../types";
+import { MessageKey, useLocale, useT } from "../../i18n";
+import { en } from "../../i18n/en";
+import { usePreferences } from "../../context/PreferencesContext";
 
-const ENTITY_TYPES: { value: string; label: string }[] = [
-  { value: "", label: "All records" },
-  { value: "auth", label: "Sign-ins & passwords" },
-  { value: "user", label: "Users" },
-  { value: "item", label: "Items" },
-  { value: "category", label: "Categories" },
-  { value: "work_order", label: "Work orders" },
-  { value: "purchase_request", label: "Purchase requests" },
-  { value: "hotel", label: "Hotels" },
-];
+const ENTITY_TYPES = ["", "auth", "user", "item", "category", "work_order", "purchase_request", "hotel"] as const;
 
-const FIELD_LABELS: Record<string, string> = {
-  hotelId: "Hotel",
-  departmentId: "Department",
-  categoryId: "Category",
-  parentId: "Parent group",
-  assignedToUserId: "Assigned to",
-  quantityOnHand: "Quantity on hand",
-  sku: "SKU",
-};
-
-function fieldLabel(field: string) {
-  if (FIELD_LABELS[field]) return FIELD_LABELS[field];
-  const words = field.replace(/([A-Z])/g, " $1").toLowerCase();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+/** A readable name for a changed field, in the reader's language when we know it. */
+function useFieldLabel() {
+  const t = useT();
+  return (field: string) => {
+    const key = `audit.field.${field}` as MessageKey;
+    if (key in en) return t(key);
+    const words = field.replace(/([A-Z])/g, " $1").toLowerCase();
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  };
 }
 
-function displayValue(value: unknown) {
-  if (value === null || value === undefined || value === "") return <span className="text-ink-600 italic">empty</span>;
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
+function DisplayValue({ value }: { value: unknown }) {
+  const t = useT();
+  if (value === null || value === undefined || value === "") return <span className="text-ink-600 italic">{t("audit.emptyValue")}</span>;
+  return <>{typeof value === "object" ? JSON.stringify(value) : String(value)}</>;
 }
-
-const dateTimeFormat = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
 
 export function AuditLog() {
+  const t = useT();
+  const { preferences } = usePreferences();
   const periodState = usePeriod();
   const { period, invalid: periodInvalid } = periodState;
   const [entityType, setEntityType] = useState("");
@@ -57,8 +41,8 @@ export function AuditLog() {
   const [exportError, setExportError] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
   }, [search]);
 
   const filterParams = new URLSearchParams({
@@ -94,7 +78,7 @@ export function AuditLog() {
         `audit-log_${toInputDate(period.from)}_to_${toInputDate(period.to)}.csv`
       );
     } catch (err) {
-      setExportError(err instanceof Error && err.message ? err.message : "Could not generate the export.");
+      setExportError(err instanceof Error && err.message ? err.message : t("audit.exportFailed"));
     } finally {
       setDownloading(false);
     }
@@ -103,21 +87,21 @@ export function AuditLog() {
   return (
     <div className="card p-5 max-w-4xl">
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-1">
-        <h2 className="font-semibold text-ink-100">Audit log</h2>
+        <h2 className="font-semibold text-ink-100">{t("settings.auditLog")}</h2>
         <button
           onClick={handleExport}
           disabled={downloading || periodInvalid}
           className="btn-ghost text-xs px-2.5 py-1.5 self-start"
         >
-          {downloading ? "Preparing..." : "Export CSV"}
+          {downloading ? t("common.preparing") : t("common.exportCsv")}
         </button>
       </div>
       <p className="text-sm text-ink-500 mb-5">
-        Who changed what, and when. Stock receives, issues and adjustments are in the{" "}
+        {t("audit.description")}{" "}
         <Link to="/settings/data" className="text-gold-400 hover:text-gold-300">
-          transaction log
+          {t("audit.openReports")}
         </Link>
-        .
+        {preferences.language !== "en" && <span className="block text-xs mt-1">{t("audit.summariesEnglish")}</span>}
       </p>
 
       <div className="border border-navy-800 rounded-md px-4 py-3 mb-4 space-y-3">
@@ -127,11 +111,11 @@ export function AuditLog() {
             value={entityType}
             onChange={(e) => setEntityType(e.target.value)}
             className="input-field py-1.5"
-            aria-label="Record type"
+            aria-label={t("audit.recordType")}
           >
-            {ENTITY_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+            {ENTITY_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {t(type ? (`audit.type.${type}` as MessageKey) : "audit.type.all")}
               </option>
             ))}
           </select>
@@ -139,9 +123,9 @@ export function AuditLog() {
             value={actorUserId}
             onChange={(e) => setActorUserId(e.target.value)}
             className="input-field py-1.5"
-            aria-label="User"
+            aria-label={t("audit.user")}
           >
-            <option value="">All users</option>
+            <option value="">{t("audit.allUsers")}</option>
             {usersQuery.data?.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name}
@@ -152,22 +136,22 @@ export function AuditLog() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search descriptions…"
+            placeholder={t("audit.searchPlaceholder")}
             className="input-field py-1.5"
-            aria-label="Search"
+            aria-label={t("audit.search")}
           />
         </div>
       </div>
 
       {exportError && <p className="text-sm text-rose-400 mb-3">{exportError}</p>}
-      {logQuery.isError && <p className="text-sm text-rose-400">Could not load the audit log.</p>}
+      {logQuery.isError && <p className="text-sm text-rose-400">{t("audit.loadFailed")}</p>}
       {logQuery.isLoading && (
         <div className="flex items-center gap-2 text-sm text-ink-500">
-          <Spinner /> Loading…
+          <Spinner /> {t("common.loading")}
         </div>
       )}
       {logQuery.isSuccess && entries.length === 0 && (
-        <p className="text-sm text-ink-500">Nothing recorded for these filters.</p>
+        <p className="text-sm text-ink-500">{t("audit.empty")}</p>
       )}
 
       <ul className="divide-y divide-navy-800">
@@ -182,7 +166,7 @@ export function AuditLog() {
           disabled={logQuery.isFetchingNextPage}
           className="btn-ghost text-xs px-2.5 py-1.5 mt-4"
         >
-          {logQuery.isFetchingNextPage ? "Loading…" : "Load more"}
+          {logQuery.isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
         </button>
       )}
     </div>
@@ -190,6 +174,16 @@ export function AuditLog() {
 }
 
 function AuditRow({ entry }: { entry: AuditLogEntry }) {
+  const t = useT();
+  const fieldLabel = useFieldLabel();
+  const locale = useLocale();
+  const dateTimeFormat = new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
   const [open, setOpen] = useState(false);
   const changes = Object.entries(entry.changes ?? {});
   const failed = entry.action === "auth.login_failed";
@@ -198,7 +192,7 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
     <li className="py-3">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full text-left flex items-start gap-3 group"
+        className="w-full text-start flex items-start gap-3 group"
         aria-expanded={open}
       >
         <span className={`mt-0.5 text-ink-600 text-xs transition-transform ${open ? "rotate-90" : ""}`} aria-hidden="true">
@@ -212,11 +206,12 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
             {/* A failed sign-in names the targeted account, not someone who actually acted. */}
             {failed
               ? entry.actor
-                ? `Attempt on ${entry.actor.name}'s account`
-                : "No matching account"
-              : entry.actor?.name ?? "Unknown user"}{" "}
+                ? t("audit.attemptOn", { name: entry.actor.name })
+                : t("audit.noAccount")
+              : entry.actor?.name ?? t("audit.unknownUser")}{" "}
             · {dateTimeFormat.format(new Date(entry.createdAt))}
-            {changes.length > 0 && ` · ${changes.length} field${changes.length === 1 ? "" : "s"} changed`}
+            {changes.length > 0 &&
+              ` · ${changes.length === 1 ? t("audit.fieldChanged") : t("audit.fieldsChanged", { count: changes.length })}`}
           </p>
         </div>
         <span className="hidden sm:inline shrink-0 font-mono text-[11px] text-ink-500 border border-navy-700 rounded px-1.5 py-0.5">
@@ -225,23 +220,23 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
       </button>
 
       {open && (
-        <div className="mt-2 ml-6 space-y-2">
+        <div className="mt-2 ms-6 space-y-2">
           {changes.length > 0 && (
             <div className="overflow-x-auto">
               <table className="text-xs w-full">
                 <thead>
-                  <tr className="text-ink-500 text-left">
-                    <th className="font-normal pr-4 py-1">Field</th>
-                    <th className="font-normal pr-4 py-1">Before</th>
-                    <th className="font-normal py-1">After</th>
+                  <tr className="text-ink-500 text-start">
+                    <th className="font-normal pe-4 py-1">{t("audit.col.field")}</th>
+                    <th className="font-normal pe-4 py-1">{t("audit.col.before")}</th>
+                    <th className="font-normal py-1">{t("audit.col.after")}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {changes.map(([field, c]) => (
                     <tr key={field} className="border-t border-navy-800">
-                      <td className="pr-4 py-1 text-ink-300 whitespace-nowrap">{fieldLabel(field)}</td>
-                      <td className="pr-4 py-1 font-mono text-ink-400 break-all">{displayValue(c.from)}</td>
-                      <td className="py-1 font-mono text-ink-100 break-all">{displayValue(c.to)}</td>
+                      <td className="pe-4 py-1 text-ink-300 whitespace-nowrap">{fieldLabel(field)}</td>
+                      <td className="pe-4 py-1 font-mono text-ink-400 break-all"><DisplayValue value={c.from} /></td>
+                      <td className="py-1 font-mono text-ink-100 break-all"><DisplayValue value={c.to} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -249,7 +244,8 @@ function AuditRow({ entry }: { entry: AuditLogEntry }) {
             </div>
           )}
           <p className="text-xs text-ink-500 font-mono break-all">
-            {entry.actor?.email ?? "no signed-in user"} · IP {entry.ip ?? "unknown"} · {entry.action}
+            {entry.actor?.email ?? t("audit.noSignedInUser")} · {t("audit.ip", { ip: entry.ip ?? t("audit.unknown") })} ·{" "}
+            {entry.action}
           </p>
         </div>
       )}

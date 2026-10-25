@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { api } from "../../api/client";
 import { ReportViewer } from "../../components/ReportViewer";
+import { MessageKey, useT } from "../../i18n";
 import { ALL_HOTELS, useHotelScope } from "../../context/HotelScopeContext";
 import { useDepartmentScope } from "../../context/DepartmentScopeContext";
 import { PeriodPicker, toInputDate, usePeriod } from "../../components/PeriodPicker";
@@ -9,50 +10,25 @@ type ReportKind = "stock" | "movement" | "transactions" | "work-orders" | "purch
 
 interface Report {
   kind: ReportKind;
-  title: string;
-  description: string;
+  title: MessageKey;
+  description: MessageKey;
   /** Whether the report covers the chosen date range, or is a snapshot of right now. */
   usesPeriod: boolean;
 }
 
 // The audit log has its own Export button on the Audit log page, with that page's filters.
 const REPORTS: Report[] = [
-  {
-    kind: "stock",
-    title: "Stock",
-    description:
-      "Every item as of now: stock status, value, days of cover and a suggested order quantity. Out and low items are listed first — filter Status for a reorder list.",
-    usesPeriod: false,
-  },
-  {
-    kind: "movement",
-    title: "Stock movement",
-    description: "Per item: opening balance, received, issued, adjusted and closing balance.",
-    usesPeriod: true,
-  },
-  {
-    kind: "transactions",
-    title: "Transactions",
-    description: "Every receive, issue and adjustment: who, when, how much, and the linked work order or request.",
-    usesPeriod: true,
-  },
-  {
-    kind: "work-orders",
-    title: "Work orders",
-    description: "Work orders opened in the period, with time open and materials issued against each.",
-    usesPeriod: true,
-  },
-  {
-    kind: "purchase-requests",
-    title: "Purchase requests",
-    description: "One row per requested item, with quantities requested, received and outstanding.",
-    usesPeriod: true,
-  },
+  { kind: "stock", title: "rpt.stock", description: "rpt.stockHint", usesPeriod: false },
+  { kind: "movement", title: "rpt.movement", description: "rpt.movementHint", usesPeriod: true },
+  { kind: "transactions", title: "rpt.transactions", description: "rpt.transactionsHint", usesPeriod: true },
+  { kind: "work-orders", title: "rpt.workOrders", description: "rpt.workOrdersHint", usesPeriod: true },
+  { kind: "purchase-requests", title: "rpt.purchaseRequests", description: "rpt.purchaseRequestsHint", usesPeriod: true },
 ];
 
 export function DataExport() {
   const { hotels, selectedHotelId } = useHotelScope();
   const { departments, selectedDepartmentId } = useDepartmentScope();
+  const t = useT();
   const [downloading, setDownloading] = useState<ReportKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const periodState = usePeriod();
@@ -79,7 +55,9 @@ export function DataExport() {
   }
 
   function periodLabel(report: Report) {
-    return report.usesPeriod ? `${toInputDate(period.from)} to ${toInputDate(period.to)}` : `as of ${toInputDate(new Date())}`;
+    return report.usesPeriod
+      ? t("rpt.periodLabel", { from: toInputDate(period.from), to: toInputDate(period.to) })
+      : t("rpt.asOf", { date: toInputDate(new Date()) });
   }
 
   async function handleDownload(report: Report) {
@@ -92,7 +70,7 @@ export function DataExport() {
         : toInputDate(new Date());
       await api.download(reportPath(report), `${report.kind}_${scopeName}_${dateName}.csv`);
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : "Could not generate the export. Try again in a moment.");
+      setError(err instanceof Error && err.message ? err.message : t("rpt.exportFailed"));
     } finally {
       setDownloading(null);
     }
@@ -100,15 +78,16 @@ export function DataExport() {
 
   return (
     <div className="card p-5 max-w-2xl">
-      <h2 className="font-semibold text-ink-100 mb-1">Reports & exports</h2>
+      <h2 className="font-semibold text-ink-100 mb-1">{t("rpt.title")}</h2>
       <p className="text-sm text-ink-500 mb-5">
-        CSV files for {department?.name ?? "your department"} ·{" "}
-        {viewingAllHotels ? "all hotels" : hotel?.name ?? "your hotel"}. They open directly in Excel or Google
-        Sheets. Times are in your time zone.
+        {t("rpt.description", {
+          department: department?.name ?? t("rpt.yourDepartment"),
+          hotel: viewingAllHotels ? t("rpt.allHotels") : hotel?.name ?? t("rpt.yourHotel"),
+        })}
       </p>
 
       <div className="border border-navy-800 rounded-md px-4 py-3 mb-3">
-        <p className="text-xs uppercase tracking-wide text-ink-500 mb-2">Date range</p>
+        <p className="text-xs uppercase tracking-wide text-ink-500 mb-2">{t("rpt.dateRange")}</p>
         <PeriodPicker state={periodState} />
       </div>
 
@@ -122,10 +101,10 @@ export function DataExport() {
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-ink-100">
-                  {report.title}
-                  {!report.usesPeriod && <span className="ml-2 text-xs font-normal text-ink-500">as of now</span>}
+                  {t(report.title)}
+                  {!report.usesPeriod && <span className="ms-2 text-xs font-normal text-ink-500">{t("rpt.asOfNow")}</span>}
                 </p>
-                <p className="text-xs text-ink-500">{report.description}</p>
+                <p className="text-xs text-ink-500">{t(report.description)}</p>
               </div>
               <div className="flex gap-2 self-start sm:self-center flex-none">
                 <button
@@ -137,14 +116,14 @@ export function DataExport() {
                   disabled={report.usesPeriod && periodInvalid}
                   className="btn-ghost text-xs px-2.5 py-1.5"
                 >
-                  View
+                  {t("common.view")}
                 </button>
                 <button
                   onClick={() => handleDownload(report)}
                   disabled={busy || (report.usesPeriod && periodInvalid)}
                   className="btn-ghost text-xs px-2.5 py-1.5"
                 >
-                  {busy ? "Preparing..." : "Download CSV"}
+                  {busy ? t("common.preparing") : t("common.downloadCsv")}
                 </button>
               </div>
             </div>
@@ -152,15 +131,16 @@ export function DataExport() {
         })}
       </div>
 
-      <p className="text-xs text-ink-500 mt-4">The audit log is exported from its own page, Settings → Audit log.</p>
+      <p className="text-xs text-ink-500 mt-4">{t("rpt.auditNote")}</p>
+      <p className="text-xs text-ink-500 mt-1">{t("rpt.csvEnglish")}</p>
 
       {error && <p className="text-sm text-rose-400 mt-4">{error}</p>}
 
       {viewing && (
         <ReportViewer
-          title={viewing.report.title}
-          subtitle={`${department?.name ?? "Your department"} · ${
-            viewingAllHotels ? "All hotels" : hotel?.name ?? "your hotel"
+          title={t(viewing.report.title)}
+          subtitle={`${department?.name ?? t("rpt.yourDepartment")} · ${
+            viewingAllHotels ? t("rpt.allHotels") : hotel?.name ?? t("rpt.yourHotel")
           } · ${viewing.label}`}
           path={viewing.path}
           onDownload={() => handleDownload(viewing.report)}

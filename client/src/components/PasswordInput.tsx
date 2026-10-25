@@ -1,4 +1,5 @@
 import { InputHTMLAttributes, useState } from "react";
+import { useT } from "../i18n";
 
 function EyeIcon({ open }: { open: boolean }) {
   if (open) {
@@ -28,6 +29,7 @@ function EyeIcon({ open }: { open: boolean }) {
 }
 
 export function PasswordInput({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  const t = useT();
   const [visible, setVisible] = useState(false);
 
   return (
@@ -35,14 +37,14 @@ export function PasswordInput({ className = "", ...props }: InputHTMLAttributes<
       <input
         {...props}
         type={visible ? "text" : "password"}
-        className={`${className} pr-9`}
+        className={`${className} pe-9`}
       />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}
-        className="absolute inset-y-0 right-0 flex items-center px-2.5 rounded-r-md text-ink-500 hover:text-ink-200 focus-visible:outline-none focus-visible:text-ink-200 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500/50"
+        className="absolute inset-y-0 end-0 flex items-center px-2.5 rounded-e-md text-ink-500 hover:text-ink-200 focus-visible:outline-none focus-visible:text-ink-200 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-gold-500/50"
         aria-pressed={visible}
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={visible ? t("password.hide") : t("password.show")}
       >
         <EyeIcon open={visible} />
       </button>

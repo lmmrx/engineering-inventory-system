@@ -11,8 +11,8 @@ export const preferencesSchema = z
     fontSize: z.enum(["tiny", "small", "default", "large", "huge"]),
     fontFamily: z.enum(["system", "classic", "serif", "rounded", "readable", "mono"]),
     zoom: z.union([z.literal(80), z.literal(90), z.literal(100), z.literal(110), z.literal(125), z.literal(150)]),
-    // English, French, Filipino, Punjabi, Somali, Russian, Urdu, Romanian.
-    language: z.enum(["en", "fr", "fil", "pa", "so", "ru", "ur", "ro"]),
+    // English or French. A retired choice saved earlier reads back as unset (English).
+    language: z.enum(["en", "fr"]),
   })
   .partial()
   .strict();

@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { useT } from "../i18n";
 
 export function Modal({
   title,
@@ -11,12 +12,13 @@ export function Modal({
   onClose: () => void;
   maxWidth?: string;
 }) {
+  const t = useT();
   return (
     <div className="modal-overlay">
       <div className={`modal-panel ${maxWidth}`}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-ink-100">{title}</h2>
-          <button onClick={onClose} className="text-ink-500 hover:text-ink-100">
+          <button onClick={onClose} className="text-ink-500 hover:text-ink-100" aria-label={t("common.close")}>
             ✕
           </button>
         </div>
@@ -46,13 +48,14 @@ export function ModalActions({
   submitLabel: string;
   disabled?: boolean;
 }) {
+  const t = useT();
   return (
     <div className="flex justify-end gap-2 pt-2">
       <button type="button" onClick={onClose} className="btn-ghost">
-        Cancel
+        {t("common.cancel")}
       </button>
       <button type="submit" disabled={submitting || disabled} className="btn-primary">
-        {submitting ? "Saving..." : submitLabel}
+        {submitting ? t("common.saving") : submitLabel}
       </button>
     </div>
   );
