@@ -1,6 +1,9 @@
 {
   "name": "inventory-management-system",
   "private": true,
+  "engines": {
+    "node": ">=22.23.4 <23"
+  },
   "workspaces": [
     "server",
     "client"
